@@ -16,6 +16,7 @@ bun.lockb
 dist
 .output
 .wrangler
+.vercel
 
 # Testing
 coverage
