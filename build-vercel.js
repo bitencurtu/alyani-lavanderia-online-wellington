@@ -15,6 +15,7 @@ if (fs.existsSync(vercelDir)) {
 
 // Criar estrutura básica
 fs.mkdirSync(path.join(vercelDir, 'static'), { recursive: true });
+fs.mkdirSync(path.join(vercelDir, 'functions', 'index.func'), { recursive: true });
 
 // Função para copiar diretórios recursivamente
 function copyDir(src, dest) {
@@ -41,7 +42,50 @@ if (fs.existsSync(path.join(distDir, 'client'))) {
   copyDir(path.join(distDir, 'client'), path.join(vercelDir, 'static'));
 }
 
-// Encontrar o arquivo JS principal
+// Copiar arquivos server para a função
+if (fs.existsSync(path.join(distDir, 'server'))) {
+  copyDir(path.join(distDir, 'server'), path.join(vercelDir, 'functions', 'index.func'));
+}
+
+// Copiar node_modules? Não, Vercel instala dependências
+// Vamos criar um package.json para a função
+const pkgJson = {
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-start": "*",
+    "react": "*",
+    "react-dom": "*"
+  }
+};
+fs.writeFileSync(path.join(vercelDir, 'functions', 'index.func', 'package.json'), JSON.stringify(pkgJson, null, 2));
+
+// Criar arquivo .vc-config.json para a função
+fs.writeFileSync(
+  path.join(vercelDir, 'functions', 'index.func', '.vc-config.json'),
+  JSON.stringify({
+    runtime: "nodejs20.x",
+    handler: "index.js",
+    launcherType: "Nodejs"
+  }, null, 2)
+);
+
+// Criar index.js da função
+const functionCode = `
+import { createRequestHandler } from "@tanstack/react-start";
+import * as build from "./_tanstack-start-manifest_v-U5NlpOoh.js";
+
+const handler = createRequestHandler({
+  build,
+  mode: "production",
+});
+
+export default async function vercelHandler(req, res) {
+  return handler(req, res);
+}
+`;
+fs.writeFileSync(path.join(vercelDir, 'functions', 'index.func', 'index.js'), functionCode);
+
+// Encontrar o arquivo JS principal para o SPA fallback
 const assetsDir = path.join(vercelDir, 'static', 'assets');
 const jsFiles = fs.readdirSync(assetsDir).filter(file => file.startsWith('index-') && file.endsWith('.js'));
 const mainJsFile = jsFiles[0] || 'index.js';
@@ -76,7 +120,7 @@ fs.writeFileSync(
         dest: '/index.html'
       }
     ]
-  })
+  }, null, 2)
 );
 
 console.log('✅ Build para Vercel concluído com sucesso!');
