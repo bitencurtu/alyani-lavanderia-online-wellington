@@ -18,6 +18,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    outDir: ".vercel/output",
+  },
   resolve: {
     alias: {
       "@": "/src",
