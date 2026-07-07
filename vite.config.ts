@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import { createRequire } from "node:module";
 
 // Criar require para ler package.json
@@ -14,8 +15,14 @@ export default defineConfig({
         entry: "src/server.ts",
       },
     }),
+    react(),
     tailwindcss(),
   ],
+  resolve: {
+    alias: {
+      "@": "/src",
+    },
+  },
   server: {
     port: 8081,
     strictPort: true,
