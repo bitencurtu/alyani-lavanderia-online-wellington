@@ -15,8 +15,11 @@ export default defineConfig({
       server: {
         entry: "src/server.ts",
       },
+      prerender: {
+        enabled: false,
+      },
     }),
-    nitro(),
+    nitro({ preset: "vercel" }),
     react(),
     tailwindcss(),
   ],
