@@ -11,28 +11,28 @@ import { brl, brlNumber, brDate, firstOfMonth, lastOfMonth } from "@/lib/format"
 import { Printer, Download } from "lucide-react";
 import { downloadAsPdf } from "@/lib/pdf-utils";
 
-export const Route = createFileRoute("/_authenticated/relatorios/hotel")({
-  head: () => ({ meta: [{ title: "Relatório por Hotel — Alyani" }] }),
+export const Route = createFileRoute("/_authenticated/relatorios/prestadora")({
+  head: () => ({ meta: [{ title: "Relatório por Prestadora — Alyani" }] }),
   component: Page,
 });
 
 function Page() {
-  const [hotelId, setHotelId] = useState("");
+  const [prestadoraId, setPrestadoraId] = useState("");
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
   const [dataFim, setDataFim] = useState(lastOfMonth());
 
-  const { data: hoteis = [] } = useQuery({
-    queryKey: ["hoteis-lite"],
-    queryFn: async () => (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
+  const { data: prestadoras = [] } = useQuery({
+    queryKey: ["prestadoras-lite"],
+    queryFn: async () => (await supabase.from("prestadoras").select("*").eq("status", "ativo").order("nome")).data ?? [],
   });
 
   const { data: rolls = [] } = useQuery({
-    queryKey: ["rel-hotel", hotelId, dataInicio, dataFim],
-    enabled: !!hotelId,
+    queryKey: ["rel-prestadora", prestadoraId, dataInicio, dataFim],
+    enabled: !!prestadoraId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
-        .select("id, numero, data_roll, data_vencimento, nf_fat, total_receita, rolls_alyani_itens(quantidade, valor_total, pecas(nome))")
-        .eq("hotel_id", hotelId)
+        .select("id, numero, data_roll, total_custo, rolls_alyani_itens(quantidade, custo_total, pecas(nome))")
+        .eq("prestadora_id", prestadoraId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
         .order("data_roll");
@@ -40,16 +40,15 @@ function Page() {
     },
   });
 
-  const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
+  const prestadora = (prestadoras as any[]).find((p) => p.id === prestadoraId);
 
   const consolidado = useMemo(() => {
-    // por peça
     const map = new Map<string, { nome: string; qtd: number; valor: number }>();
     for (const r of rolls) {
       for (const i of r.rolls_alyani_itens ?? []) {
         const nome = i.pecas?.nome ?? "—";
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
-        cur.qtd += Number(i.quantidade); cur.valor += Number(i.valor_total);
+        cur.qtd += Number(i.quantidade); cur.valor += Number(i.custo_total);
         map.set(nome, cur);
       }
     }
@@ -62,23 +61,23 @@ function Page() {
   return (
     <>
       <div className="print:hidden">
-        <PageHeader title="Relatório por Hotel" description="Consolidado do período no mesmo formato da planilha oficial."
+        <PageHeader title="Relatório por Prestadora" description="Consolidado do período no mesmo formato da planilha oficial."
           actions={
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => downloadAsPdf("report-hotel", `relatorio-hotel-${hotel?.nome || Date.now()}`)} disabled={!hotelId}>
+              <Button size="sm" onClick={() => downloadAsPdf("report-prestadora", `relatorio-prestadora-${prestadora?.nome || Date.now()}`)} disabled={!prestadoraId}>
                 <Download className="h-4 w-4 mr-1" /> Baixar PDF
               </Button>
-              <Button size="sm" onClick={() => window.print()} disabled={!hotelId}>
+              <Button size="sm" onClick={() => window.print()} disabled={!prestadoraId}>
                 <Printer className="h-4 w-4 mr-1" /> Imprimir
               </Button>
             </div>
           } />
         <div className="rounded-md border bg-card p-3 mb-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[260px]">
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Hotel</Label>
-            <Select value={hotelId} onValueChange={setHotelId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione um hotel…" /></SelectTrigger>
-              <SelectContent>{(hoteis as any[]).map((h) => <SelectItem key={h.id} value={h.id}>{h.nome}</SelectItem>)}</SelectContent>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Prestadora</Label>
+            <Select value={prestadoraId} onValueChange={setPrestadoraId}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione uma prestadora…" /></SelectTrigger>
+              <SelectContent>{(prestadoras as any[]).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data inicial</Label><Input type="date" className="h-9 w-[150px]" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
@@ -86,15 +85,15 @@ function Page() {
         </div>
       </div>
 
-      {!hotelId ? (
-        <div className="border rounded-md p-10 text-center text-muted-foreground bg-card text-sm">Selecione um hotel para gerar o relatório.</div>
+      {!prestadoraId ? (
+        <div className="border rounded-md p-10 text-center text-muted-foreground bg-card text-sm">Selecione uma prestadora para gerar o relatório.</div>
       ) : (
-        <div id="report-hotel" className="print-sheet mx-auto bg-white text-[11px] leading-tight text-black p-8 border shadow-sm" style={{ width: "210mm", minHeight: "297mm" }}>
+        <div id="report-prestadora" className="print-sheet mx-auto bg-white text-[11px] leading-tight text-black p-8 border shadow-sm" style={{ width: "210mm", minHeight: "297mm" }}>
           <header className="border-b-2 border-black pb-3 mb-4">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-lg font-bold tracking-wide">ALYANI LAVANDERIA</div>
-                <div className="text-[10px] uppercase tracking-widest">Relatório de Consumo por Hotel</div>
+                <div className="text-[10px] uppercase tracking-widest">Relatório de Consumo por Prestadora</div>
               </div>
               <div className="text-right text-[10px]">
                 <div><span className="uppercase text-black/60">Período:</span> {brDate(dataInicio)} — {brDate(dataFim)}</div>
@@ -106,24 +105,22 @@ function Page() {
           <section className="mb-4">
             <table className="w-full text-[11px] border-collapse">
               <tbody>
-                <tr><td className="w-[110px] font-semibold uppercase text-black/70 py-0.5">Hotel</td><td className="py-0.5">{hotel?.nome}</td></tr>
-                <tr><td className="font-semibold uppercase text-black/70 py-0.5">Razão social</td><td className="py-0.5">{hotel?.razao_social ?? "—"}</td></tr>
-                <tr><td className="font-semibold uppercase text-black/70 py-0.5">CNPJ</td><td className="py-0.5">{hotel?.cnpj ?? "—"}</td></tr>
-                <tr><td className="font-semibold uppercase text-black/70 py-0.5">Endereço</td><td className="py-0.5">{hotel?.endereco ?? "—"}</td></tr>
+                <tr><td className="w-[110px] font-semibold uppercase text-black/70 py-0.5">Prestadora</td><td className="py-0.5">{prestadora?.nome}</td></tr>
+                <tr><td className="font-semibold uppercase text-black/70 py-0.5">Razão social</td><td className="py-0.5">{prestadora?.razao_social ?? "—"}</td></tr>
+                <tr><td className="font-semibold uppercase text-black/70 py-0.5">CNPJ</td><td className="py-0.5">{prestadora?.cnpj ?? "—"}</td></tr>
+                <tr><td className="font-semibold uppercase text-black/70 py-0.5">Endereço</td><td className="py-0.5">{prestadora?.endereco ?? "—"}</td></tr>
               </tbody>
             </table>
           </section>
 
           <section className="mb-4">
-            <div className="bg-black text-white text-[10px] uppercase tracking-widest px-2 py-1">Notas / Rolls do período</div>
+            <div className="bg-black text-white text-[10px] uppercase tracking-widest px-2 py-1">Rolls do período</div>
             <table className="w-full border-collapse border border-black text-[11px]">
               <thead className="bg-black/10">
                 <tr>
                   <th className="border border-black px-2 py-1 text-left">Nº Roll</th>
                   <th className="border border-black px-2 py-1 text-left">Data</th>
-                  <th className="border border-black px-2 py-1 text-left">NF / Fatura</th>
-                  <th className="border border-black px-2 py-1 text-left">Vencimento</th>
-                  <th className="border border-black px-2 py-1 text-right">Valor</th>
+                  <th className="border border-black px-2 py-1 text-right">Custo</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,13 +128,11 @@ function Page() {
                   <tr key={r.id}>
                     <td className="border border-black px-2 py-1 font-mono">{r.numero}</td>
                     <td className="border border-black px-2 py-1">{brDate(r.data_roll)}</td>
-                    <td className="border border-black px-2 py-1">{r.nf_fat ?? "—"}</td>
-                    <td className="border border-black px-2 py-1">{brDate(r.data_vencimento)}</td>
-                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.total_receita)}</td>
+                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.total_custo)}</td>
                   </tr>
                 ))}
                 <tr className="font-semibold bg-black/5">
-                  <td className="border border-black px-2 py-1" colSpan={4}>TOTAL DE NOTAS</td>
+                  <td className="border border-black px-2 py-1" colSpan={2}>TOTAL DE ROLLS</td>
                   <td className="border border-black px-2 py-1 text-right font-mono">{brl(consolidado.totalValor)}</td>
                 </tr>
               </tbody>
@@ -151,7 +146,7 @@ function Page() {
                 <tr>
                   <th className="border border-black px-2 py-1 text-left">Peça</th>
                   <th className="border border-black px-2 py-1 text-right w-24">Qtd</th>
-                  <th className="border border-black px-2 py-1 text-right w-32">Valor Total</th>
+                  <th className="border border-black px-2 py-1 text-right w-32">Custo Total</th>
                 </tr>
               </thead>
               <tbody>

@@ -29,12 +29,28 @@ function Page() {
   const { data = [] } = useQuery({
     queryKey: ["cobrancas", filters],
     queryFn: async () => {
-      let q = supabase.from("cobrancas").select("*, hoteis(nome), rolls_alyani(numero, data_roll)").order("vencimento", { ascending: true });
-      if (filters.dataInicio) q = q.gte("vencimento", filters.dataInicio);
-      if (filters.dataFim) q = q.lte("vencimento", filters.dataFim);
+      let q = supabase
+        .from("cobrancas")
+        .select("*, hoteis(nome), rolls_alyani(numero, data_roll)")
+        .order("created_at", { ascending: false });
+      
       if (filters.hotelId) q = q.eq("hotel_id", filters.hotelId);
       if (filters.status) q = q.eq("status", filters.status as any);
-      return ((await q).data ?? []) as any[];
+      
+      const allData = ((await q).data ?? []) as any[];
+      
+      // Filtrar por data no frontend usando o data_roll do roll
+      return allData.filter((c) => {
+        if (!c.rolls_alyani?.data_roll) return true;
+        const rollDate = new Date(c.rolls_alyani.data_roll);
+        const start = filters.dataInicio ? new Date(filters.dataInicio) : null;
+        const end = filters.dataFim ? new Date(filters.dataFim) : null;
+        
+        if (start && rollDate < start) return false;
+        if (end && rollDate > end) return false;
+        
+        return true;
+      });
     },
   });
 

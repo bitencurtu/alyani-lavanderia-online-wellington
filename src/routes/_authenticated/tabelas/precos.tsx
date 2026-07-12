@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brlNumber, isoDate } from "@/lib/format";
-import { Save } from "lucide-react";
+import { Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/tabelas/precos")({
@@ -22,6 +22,7 @@ function Page() {
   const qc = useQueryClient();
   const [hotelId, setHotelId] = useState<string>("");
   const [vigencia, setVigencia] = useState<string>(isoDate());
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   const { data: hoteisData } = useQuery({
     queryKey: ["hoteis-lite"],
@@ -66,6 +67,12 @@ function Page() {
     }));
   }, [pecas, precos, vigencia]);
 
+  const filteredRows = useMemo(() => {
+    if (!searchTerm.trim()) return rows;
+    const lowerSearch = searchTerm.toLowerCase().trim();
+    return rows.filter(row => row.nome.toLowerCase().includes(lowerSearch));
+  }, [rows, searchTerm]);
+
   const save = useMutation({
     mutationFn: async () => {
       const payload = rows.map((r) => {
@@ -85,7 +92,13 @@ function Page() {
       const { error } = await supabase.from("tabela_precos").upsert(payload as any, { onConflict: "hotel_id,peca_id,data_vigencia" });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Preços salvos."); qc.invalidateQueries({ queryKey: ["precos", hotelId] }); },
+    onSuccess: () => { 
+      toast.success("Preços salvos e rolls atualizados!"); 
+      qc.invalidateQueries({ queryKey: ["precos", hotelId] });
+      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      qc.invalidateQueries({ queryKey: ["roll"] });
+      qc.invalidateQueries({ queryKey: ["roll-itens"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -105,6 +118,20 @@ function Page() {
           <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data de vigência</Label>
           <Input type="date" className="h-9 w-[160px]" value={vigencia} onChange={(e) => setVigencia(e.target.value)} />
         </div>
+        {hotelId && (
+          <div className="flex-1 min-w-[220px]">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Buscar</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="h-9 pl-8"
+                placeholder="Digite para pesquisar…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
       </div>
       {!hotelId ? (
         <div className="border rounded-md p-10 text-center text-muted-foreground bg-card text-sm">Selecione um hotel para editar os preços.</div>
@@ -119,24 +146,24 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, idx) => (
+              {filteredRows.map((r, idx) => (
                 <tr key={r.peca_id} className="border-t">
                   <td className="px-4 py-1.5">{r.nome}</td>
                   <td className="px-2 py-1">
                     <Input type="number" step="0.01" min={0} className="h-8 text-right font-mono" value={r.valor_normal}
-                      onChange={(e) => setRows((rs) => rs.map((x, i) => i === idx ? { ...x, valor_normal: Number(e.target.value) } : x))} />
+                      onChange={(e) => setRows((rs) => rs.map((x) => x.peca_id === r.peca_id ? { ...x, valor_normal: Number(e.target.value) } : x))} />
                   </td>
                   <td className="px-2 py-1">
                     <Input type="number" step="0.01" min={0} className="h-8 text-right font-mono" value={r.valor_expresso}
-                      onChange={(e) => setRows((rs) => rs.map((x, i) => i === idx ? { ...x, valor_expresso: Number(e.target.value) } : x))} />
+                      onChange={(e) => setRows((rs) => rs.map((x) => x.peca_id === r.peca_id ? { ...x, valor_expresso: Number(e.target.value) } : x))} />
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="bg-muted/30"><tr>
-              <td className="px-4 py-2 text-xs text-muted-foreground">Total de peças: {rows.length}</td>
-              <td className="px-4 py-2 text-right font-mono text-xs">Σ {brlNumber(rows.reduce((s, r) => s + r.valor_normal, 0))}</td>
-              <td className="px-4 py-2 text-right font-mono text-xs">Σ {brlNumber(rows.reduce((s, r) => s + r.valor_expresso, 0))}</td>
+              <td className="px-4 py-2 text-xs text-muted-foreground">Total de peças: {filteredRows.length}</td>
+              <td className="px-4 py-2 text-right font-mono text-xs">Σ {brlNumber(filteredRows.reduce((s, r) => s + r.valor_normal, 0))}</td>
+              <td className="px-4 py-2 text-right font-mono text-xs">Σ {brlNumber(filteredRows.reduce((s, r) => s + r.valor_expresso, 0))}</td>
             </tr></tfoot>
           </table>
         </div>

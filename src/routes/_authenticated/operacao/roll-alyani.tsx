@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, Outlet, useMatches } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +27,8 @@ type NovoItem = {
 };
 
 function Page() {
+  console.log("roll-alyani montado");
+  const matches = useMatches();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
@@ -61,6 +63,17 @@ function Page() {
     return rolls.filter((r: any) => [r.numero, r.hoteis?.nome, r.prestadoras?.nome, r.nf_fat].some((v) => (v ?? "").toString().toLowerCase().includes(s)));
   }, [rolls, filters.q]);
 
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (acc, r: any) => ({
+        receita: acc.receita + Number(r.total_receita ?? 0),
+        custo: acc.custo + Number(r.total_custo ?? 0),
+        lucro: acc.lucro + Number(r.total_lucro ?? 0),
+      }),
+      { receita: 0, custo: 0, lucro: 0 }
+    );
+  }, [rows]);
+
   const create = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -94,7 +107,6 @@ function Page() {
       qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       setOpen(false);
       setNovoItens([]);
-      navigate({ to: "/operacao/roll-alyani/$id", params: { id } });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -107,6 +119,14 @@ function Page() {
     onSuccess: () => { toast.success("Roll excluído."); qc.invalidateQueries({ queryKey: ["rolls_alyani"] }); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Check if any match is the child route (has the id param)
+  const isChildRoute = matches.some(match => match.params.id);
+  console.log("roll-alyani matches:", matches, "isChildRoute:", isChildRoute);
+  if (isChildRoute) {
+    console.log("roll-alyani: returning Outlet");
+    return <Outlet />;
+  }
 
   return (
     <AnimatedPage>
@@ -130,6 +150,22 @@ function Page() {
           </Select>
         </div>
       </FilterBar>
+
+      {/* Seção de Receita, Custos e Lucro */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Receita</div>
+          <div className="text-xl font-semibold mt-1">{brl(totals.receita)}</div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Custos</div>
+          <div className="text-xl font-semibold mt-1">{brl(totals.custo)}</div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Lucro</div>
+          <div className="text-xl font-semibold mt-1">{brl(totals.lucro)}</div>
+        </div>
+      </div>
 
       <div className="rounded-md border bg-card overflow-hidden card-hover">
         <table className="w-full text-sm">

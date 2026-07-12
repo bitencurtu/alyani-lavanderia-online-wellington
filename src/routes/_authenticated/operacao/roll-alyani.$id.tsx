@@ -29,7 +29,9 @@ type Item = {
 };
 
 function Page() {
+  console.log("roll-alyani.$id montado");
   const { id } = Route.useParams();
+  console.log("roll-alyani.$id id:", id);
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -80,13 +82,10 @@ function Page() {
     },
     onSuccess: async () => {
       toast.success("Roll atualizado. Itens recalculados.");
-      // Trigger a no-op update on itens to force re-evaluation of prices/costs via trigger.
-      const ids = itens.map((i: any) => i.id);
-      for (const iid of ids) {
-        await supabase.from("rolls_alyani_itens").update({ updated_at: new Date().toISOString() as any }).eq("id", iid);
-      }
-      qc.invalidateQueries({ queryKey: ["roll", id] });
-      qc.invalidateQueries({ queryKey: ["roll-itens", id] });
+      // Invalidate all related queries
+      await qc.invalidateQueries({ queryKey: ["roll", id] });
+      await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -101,13 +100,21 @@ function Page() {
         if (error) throw error;
       }
     },
-    onSuccess: () => { refetchItens(); refetch(); },
+    onSuccess: async () => { 
+      await refetchItens(); 
+      await refetch(); 
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const removeItem = useMutation({
     mutationFn: async (iid: string) => { const { error } = await supabase.from("rolls_alyani_itens").delete().eq("id", iid); if (error) throw error; },
-    onSuccess: () => { refetchItens(); refetch(); },
+    onSuccess: async () => { 
+      await refetchItens(); 
+      await refetch(); 
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -217,10 +224,18 @@ function Page() {
 function ItemRow({ it, pecas, onSave, onRemove }: { it: any; pecas: any[]; onSave: (i: Item) => void; onRemove: () => void }) {
   const [local, setLocal] = useState<Item>({ peca_id: it.peca_id, quantidade: Number(it.quantidade), expresso_item: !!it.expresso_item });
   const dirty = local.peca_id !== it.peca_id || local.quantidade !== Number(it.quantidade) || local.expresso_item !== !!it.expresso_item;
+
+  // When peça is changed, immediately save
+  const handlePecaChange = (v: string) => {
+    const newLocal = { ...local, peca_id: v };
+    setLocal(newLocal);
+    onSave(newLocal);
+  };
+
   return (
     <tr className="border-t">
       <td className="px-2 py-1">
-        <Select value={local.peca_id} onValueChange={(v) => setLocal({ ...local, peca_id: v })}>
+        <Select value={local.peca_id} onValueChange={handlePecaChange}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>{pecas.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
         </Select>

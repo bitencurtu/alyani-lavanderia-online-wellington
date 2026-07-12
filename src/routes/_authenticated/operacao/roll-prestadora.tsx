@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, Outlet, useMatches } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ type NovoItem = {
 };
 
 function Page() {
+  const matches = useMatches();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
@@ -77,7 +78,6 @@ function Page() {
       qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
       setOpen(false);
       setNovoItens([]);
-      navigate({ to: "/operacao/roll-prestadora/$id", params: { id } });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -90,6 +90,10 @@ function Page() {
     onSuccess: () => { toast.success("Roll excluído."); qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Check if any match is the child route (has the id param)
+  const isChildRoute = matches.some(match => match.params.id);
+  if (isChildRoute) return <Outlet />;
 
   return (
     <AnimatedPage>

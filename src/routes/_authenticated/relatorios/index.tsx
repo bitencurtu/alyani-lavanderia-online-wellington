@@ -9,9 +9,9 @@ export const Route = createFileRoute("/_authenticated/relatorios/")({
 
 const items = [
   { to: "/relatorios/hotel", label: "Relatório por Hotel", icon: Building2, desc: "Consumo mensal por peça, receita e vencimentos.", ready: true },
-  { to: "/relatorios/prestadora", label: "Relatório por Prestadora", icon: Truck, desc: "Peças processadas, custos e pagamentos.", ready: false },
-  { to: "/relatorios/roll", label: "Espelho de Roll", icon: ClipboardList, desc: "Reprodução do Roll para envio ao cliente.", ready: false },
-  { to: "/relatorios/faturamento", label: "Faturamento consolidado", icon: FileText, desc: "Totais do período por hotel e por prestadora.", ready: false },
+  { to: "/relatorios/cliente", label: "Relatório Cliente", icon: FileText, desc: "Relatório completo em A4 horizontal para cliente.", ready: true },
+  { to: "/relatorios/financeiro", label: "Relatório Financeiro", icon: FileText, desc: "Receita, custos, lucro e totais por hotel e prestadora.", ready: true },
+  { to: "/relatorios/prestadora", label: "Relatório por Prestadora", icon: Truck, desc: "Peças processadas, custos e pagamentos.", ready: true },
 ];
 
 function Page() {

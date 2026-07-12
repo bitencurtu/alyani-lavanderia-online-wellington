@@ -17,11 +17,15 @@ import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedRelatoriosIndexRouteImport } from './routes/_authenticated/relatorios/index'
 import { Route as AuthenticatedTabelasPrecosRouteImport } from './routes/_authenticated/tabelas/precos'
 import { Route as AuthenticatedTabelasCustosRouteImport } from './routes/_authenticated/tabelas/custos'
+import { Route as AuthenticatedRelatoriosPrestadoraRouteImport } from './routes/_authenticated/relatorios/prestadora'
 import { Route as AuthenticatedRelatoriosHotelRouteImport } from './routes/_authenticated/relatorios/hotel'
+import { Route as AuthenticatedRelatoriosFinanceiroRouteImport } from './routes/_authenticated/relatorios/financeiro'
+import { Route as AuthenticatedRelatoriosClienteRouteImport } from './routes/_authenticated/relatorios/cliente'
 import { Route as AuthenticatedOperacaoRollPrestadoraRouteImport } from './routes/_authenticated/operacao/roll-prestadora'
 import { Route as AuthenticatedOperacaoRollAlyaniRouteImport } from './routes/_authenticated/operacao/roll-alyani'
 import { Route as AuthenticatedOperacaoConferenciaRouteImport } from './routes/_authenticated/operacao/conferencia'
 import { Route as AuthenticatedFinanceiroPagamentosRouteImport } from './routes/_authenticated/financeiro/pagamentos'
+import { Route as AuthenticatedFinanceiroFluxoDeCaixaRouteImport } from './routes/_authenticated/financeiro/fluxo-de-caixa'
 import { Route as AuthenticatedFinanceiroCobrancasRouteImport } from './routes/_authenticated/financeiro/cobrancas'
 import { Route as AuthenticatedCadastrosPrestadorasRouteImport } from './routes/_authenticated/cadastros/prestadoras'
 import { Route as AuthenticatedCadastrosPecasRouteImport } from './routes/_authenticated/cadastros/pecas'
@@ -72,10 +76,28 @@ const AuthenticatedTabelasCustosRoute =
     path: '/tabelas/custos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRelatoriosPrestadoraRoute =
+  AuthenticatedRelatoriosPrestadoraRouteImport.update({
+    id: '/relatorios/prestadora',
+    path: '/relatorios/prestadora',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedRelatoriosHotelRoute =
   AuthenticatedRelatoriosHotelRouteImport.update({
     id: '/relatorios/hotel',
     path: '/relatorios/hotel',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRelatoriosFinanceiroRoute =
+  AuthenticatedRelatoriosFinanceiroRouteImport.update({
+    id: '/relatorios/financeiro',
+    path: '/relatorios/financeiro',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRelatoriosClienteRoute =
+  AuthenticatedRelatoriosClienteRouteImport.update({
+    id: '/relatorios/cliente',
+    path: '/relatorios/cliente',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOperacaoRollPrestadoraRoute =
@@ -100,6 +122,12 @@ const AuthenticatedFinanceiroPagamentosRoute =
   AuthenticatedFinanceiroPagamentosRouteImport.update({
     id: '/financeiro/pagamentos',
     path: '/financeiro/pagamentos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedFinanceiroFluxoDeCaixaRoute =
+  AuthenticatedFinanceiroFluxoDeCaixaRouteImport.update({
+    id: '/financeiro/fluxo-de-caixa',
+    path: '/financeiro/fluxo-de-caixa',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedFinanceiroCobrancasRoute =
@@ -148,11 +176,15 @@ export interface FileRoutesByFullPath {
   '/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
   '/financeiro/cobrancas': typeof AuthenticatedFinanceiroCobrancasRoute
+  '/financeiro/fluxo-de-caixa': typeof AuthenticatedFinanceiroFluxoDeCaixaRoute
   '/financeiro/pagamentos': typeof AuthenticatedFinanceiroPagamentosRoute
   '/operacao/conferencia': typeof AuthenticatedOperacaoConferenciaRoute
   '/operacao/roll-alyani': typeof AuthenticatedOperacaoRollAlyaniRouteWithChildren
   '/operacao/roll-prestadora': typeof AuthenticatedOperacaoRollPrestadoraRouteWithChildren
+  '/relatorios/cliente': typeof AuthenticatedRelatoriosClienteRoute
+  '/relatorios/financeiro': typeof AuthenticatedRelatoriosFinanceiroRoute
   '/relatorios/hotel': typeof AuthenticatedRelatoriosHotelRoute
+  '/relatorios/prestadora': typeof AuthenticatedRelatoriosPrestadoraRoute
   '/tabelas/custos': typeof AuthenticatedTabelasCustosRoute
   '/tabelas/precos': typeof AuthenticatedTabelasPrecosRoute
   '/relatorios/': typeof AuthenticatedRelatoriosIndexRoute
@@ -168,11 +200,15 @@ export interface FileRoutesByTo {
   '/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
   '/financeiro/cobrancas': typeof AuthenticatedFinanceiroCobrancasRoute
+  '/financeiro/fluxo-de-caixa': typeof AuthenticatedFinanceiroFluxoDeCaixaRoute
   '/financeiro/pagamentos': typeof AuthenticatedFinanceiroPagamentosRoute
   '/operacao/conferencia': typeof AuthenticatedOperacaoConferenciaRoute
   '/operacao/roll-alyani': typeof AuthenticatedOperacaoRollAlyaniRouteWithChildren
   '/operacao/roll-prestadora': typeof AuthenticatedOperacaoRollPrestadoraRouteWithChildren
+  '/relatorios/cliente': typeof AuthenticatedRelatoriosClienteRoute
+  '/relatorios/financeiro': typeof AuthenticatedRelatoriosFinanceiroRoute
   '/relatorios/hotel': typeof AuthenticatedRelatoriosHotelRoute
+  '/relatorios/prestadora': typeof AuthenticatedRelatoriosPrestadoraRoute
   '/tabelas/custos': typeof AuthenticatedTabelasCustosRoute
   '/tabelas/precos': typeof AuthenticatedTabelasPrecosRoute
   '/relatorios': typeof AuthenticatedRelatoriosIndexRoute
@@ -190,11 +226,15 @@ export interface FileRoutesById {
   '/_authenticated/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/_authenticated/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
   '/_authenticated/financeiro/cobrancas': typeof AuthenticatedFinanceiroCobrancasRoute
+  '/_authenticated/financeiro/fluxo-de-caixa': typeof AuthenticatedFinanceiroFluxoDeCaixaRoute
   '/_authenticated/financeiro/pagamentos': typeof AuthenticatedFinanceiroPagamentosRoute
   '/_authenticated/operacao/conferencia': typeof AuthenticatedOperacaoConferenciaRoute
   '/_authenticated/operacao/roll-alyani': typeof AuthenticatedOperacaoRollAlyaniRouteWithChildren
   '/_authenticated/operacao/roll-prestadora': typeof AuthenticatedOperacaoRollPrestadoraRouteWithChildren
+  '/_authenticated/relatorios/cliente': typeof AuthenticatedRelatoriosClienteRoute
+  '/_authenticated/relatorios/financeiro': typeof AuthenticatedRelatoriosFinanceiroRoute
   '/_authenticated/relatorios/hotel': typeof AuthenticatedRelatoriosHotelRoute
+  '/_authenticated/relatorios/prestadora': typeof AuthenticatedRelatoriosPrestadoraRoute
   '/_authenticated/tabelas/custos': typeof AuthenticatedTabelasCustosRoute
   '/_authenticated/tabelas/precos': typeof AuthenticatedTabelasPrecosRoute
   '/_authenticated/relatorios/': typeof AuthenticatedRelatoriosIndexRoute
@@ -212,11 +252,15 @@ export interface FileRouteTypes {
     | '/cadastros/pecas'
     | '/cadastros/prestadoras'
     | '/financeiro/cobrancas'
+    | '/financeiro/fluxo-de-caixa'
     | '/financeiro/pagamentos'
     | '/operacao/conferencia'
     | '/operacao/roll-alyani'
     | '/operacao/roll-prestadora'
+    | '/relatorios/cliente'
+    | '/relatorios/financeiro'
     | '/relatorios/hotel'
+    | '/relatorios/prestadora'
     | '/tabelas/custos'
     | '/tabelas/precos'
     | '/relatorios/'
@@ -232,11 +276,15 @@ export interface FileRouteTypes {
     | '/cadastros/pecas'
     | '/cadastros/prestadoras'
     | '/financeiro/cobrancas'
+    | '/financeiro/fluxo-de-caixa'
     | '/financeiro/pagamentos'
     | '/operacao/conferencia'
     | '/operacao/roll-alyani'
     | '/operacao/roll-prestadora'
+    | '/relatorios/cliente'
+    | '/relatorios/financeiro'
     | '/relatorios/hotel'
+    | '/relatorios/prestadora'
     | '/tabelas/custos'
     | '/tabelas/precos'
     | '/relatorios'
@@ -253,11 +301,15 @@ export interface FileRouteTypes {
     | '/_authenticated/cadastros/pecas'
     | '/_authenticated/cadastros/prestadoras'
     | '/_authenticated/financeiro/cobrancas'
+    | '/_authenticated/financeiro/fluxo-de-caixa'
     | '/_authenticated/financeiro/pagamentos'
     | '/_authenticated/operacao/conferencia'
     | '/_authenticated/operacao/roll-alyani'
     | '/_authenticated/operacao/roll-prestadora'
+    | '/_authenticated/relatorios/cliente'
+    | '/_authenticated/relatorios/financeiro'
     | '/_authenticated/relatorios/hotel'
+    | '/_authenticated/relatorios/prestadora'
     | '/_authenticated/tabelas/custos'
     | '/_authenticated/tabelas/precos'
     | '/_authenticated/relatorios/'
@@ -329,11 +381,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTabelasCustosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/relatorios/prestadora': {
+      id: '/_authenticated/relatorios/prestadora'
+      path: '/relatorios/prestadora'
+      fullPath: '/relatorios/prestadora'
+      preLoaderRoute: typeof AuthenticatedRelatoriosPrestadoraRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/relatorios/hotel': {
       id: '/_authenticated/relatorios/hotel'
       path: '/relatorios/hotel'
       fullPath: '/relatorios/hotel'
       preLoaderRoute: typeof AuthenticatedRelatoriosHotelRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/relatorios/financeiro': {
+      id: '/_authenticated/relatorios/financeiro'
+      path: '/relatorios/financeiro'
+      fullPath: '/relatorios/financeiro'
+      preLoaderRoute: typeof AuthenticatedRelatoriosFinanceiroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/relatorios/cliente': {
+      id: '/_authenticated/relatorios/cliente'
+      path: '/relatorios/cliente'
+      fullPath: '/relatorios/cliente'
+      preLoaderRoute: typeof AuthenticatedRelatoriosClienteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/operacao/roll-prestadora': {
@@ -362,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/financeiro/pagamentos'
       fullPath: '/financeiro/pagamentos'
       preLoaderRoute: typeof AuthenticatedFinanceiroPagamentosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro/fluxo-de-caixa': {
+      id: '/_authenticated/financeiro/fluxo-de-caixa'
+      path: '/financeiro/fluxo-de-caixa'
+      fullPath: '/financeiro/fluxo-de-caixa'
+      preLoaderRoute: typeof AuthenticatedFinanceiroFluxoDeCaixaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro/cobrancas': {
@@ -446,11 +526,15 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCadastrosPecasRoute: typeof AuthenticatedCadastrosPecasRoute
   AuthenticatedCadastrosPrestadorasRoute: typeof AuthenticatedCadastrosPrestadorasRoute
   AuthenticatedFinanceiroCobrancasRoute: typeof AuthenticatedFinanceiroCobrancasRoute
+  AuthenticatedFinanceiroFluxoDeCaixaRoute: typeof AuthenticatedFinanceiroFluxoDeCaixaRoute
   AuthenticatedFinanceiroPagamentosRoute: typeof AuthenticatedFinanceiroPagamentosRoute
   AuthenticatedOperacaoConferenciaRoute: typeof AuthenticatedOperacaoConferenciaRoute
   AuthenticatedOperacaoRollAlyaniRoute: typeof AuthenticatedOperacaoRollAlyaniRouteWithChildren
   AuthenticatedOperacaoRollPrestadoraRoute: typeof AuthenticatedOperacaoRollPrestadoraRouteWithChildren
+  AuthenticatedRelatoriosClienteRoute: typeof AuthenticatedRelatoriosClienteRoute
+  AuthenticatedRelatoriosFinanceiroRoute: typeof AuthenticatedRelatoriosFinanceiroRoute
   AuthenticatedRelatoriosHotelRoute: typeof AuthenticatedRelatoriosHotelRoute
+  AuthenticatedRelatoriosPrestadoraRoute: typeof AuthenticatedRelatoriosPrestadoraRoute
   AuthenticatedTabelasCustosRoute: typeof AuthenticatedTabelasCustosRoute
   AuthenticatedTabelasPrecosRoute: typeof AuthenticatedTabelasPrecosRoute
   AuthenticatedRelatoriosIndexRoute: typeof AuthenticatedRelatoriosIndexRoute
@@ -464,6 +548,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCadastrosPrestadorasRoute:
     AuthenticatedCadastrosPrestadorasRoute,
   AuthenticatedFinanceiroCobrancasRoute: AuthenticatedFinanceiroCobrancasRoute,
+  AuthenticatedFinanceiroFluxoDeCaixaRoute:
+    AuthenticatedFinanceiroFluxoDeCaixaRoute,
   AuthenticatedFinanceiroPagamentosRoute:
     AuthenticatedFinanceiroPagamentosRoute,
   AuthenticatedOperacaoConferenciaRoute: AuthenticatedOperacaoConferenciaRoute,
@@ -471,7 +557,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedOperacaoRollAlyaniRouteWithChildren,
   AuthenticatedOperacaoRollPrestadoraRoute:
     AuthenticatedOperacaoRollPrestadoraRouteWithChildren,
+  AuthenticatedRelatoriosClienteRoute: AuthenticatedRelatoriosClienteRoute,
+  AuthenticatedRelatoriosFinanceiroRoute:
+    AuthenticatedRelatoriosFinanceiroRoute,
   AuthenticatedRelatoriosHotelRoute: AuthenticatedRelatoriosHotelRoute,
+  AuthenticatedRelatoriosPrestadoraRoute:
+    AuthenticatedRelatoriosPrestadoraRoute,
   AuthenticatedTabelasCustosRoute: AuthenticatedTabelasCustosRoute,
   AuthenticatedTabelasPrecosRoute: AuthenticatedTabelasPrecosRoute,
   AuthenticatedRelatoriosIndexRoute: AuthenticatedRelatoriosIndexRoute,

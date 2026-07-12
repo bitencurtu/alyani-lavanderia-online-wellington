@@ -33,7 +33,7 @@ export function FilterBar({
   showNumero?: boolean;
 }) {
   return (
-    <div className="rounded-md border bg-card p-3 mb-4">
+    <div className="sticky top-0 z-10 rounded-md border bg-card p-3 mb-4">
       <div className="flex flex-wrap items-end gap-3">
         {showBusca && (
           <div className="flex-1 min-w-[220px]">

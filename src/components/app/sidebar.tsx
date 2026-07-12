@@ -12,6 +12,7 @@ import {
   GitCompare,
   Receipt,
   Wallet,
+  TrendingUp,
   FileBarChart,
   Settings,
   LogOut,
@@ -21,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "./theme-toggle";
 
 type Item = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -57,6 +59,7 @@ const groups: { label: string; items: Item[] }[] = [
     items: [
       { to: "/financeiro/cobrancas", label: "Cobranças", icon: Receipt },
       { to: "/financeiro/pagamentos", label: "Pagamentos", icon: Wallet },
+      { to: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: TrendingUp },
     ],
   },
   {
@@ -73,13 +76,14 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const isActive = (to: string) => pathname === to || pathname.startsWith(to + "/");
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="px-4 h-14 flex items-center border-b border-sidebar-border">
+      <div className="px-4 h-14 flex items-center justify-between border-b border-sidebar-border">
         <div className="flex flex-col leading-tight">
           <span className="text-sm font-semibold tracking-wide">ALYANI</span>
           <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">
             Lavanderia
           </span>
         </div>
+        <ThemeToggle />
       </div>
       <nav className="flex-1 overflow-y-auto py-3">
         {groups.map((g, i) => (
@@ -144,22 +148,25 @@ export function MobileTopBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => { setOpen(false); }, [pathname]);
   return (
-    <header className="md:hidden sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-sidebar text-sidebar-foreground px-2">
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border">
-          <SheetTitle className="sr-only">Menu</SheetTitle>
-          <SidebarBody onNavigate={() => setOpen(false)} />
-        </SheetContent>
-      </Sheet>
-      <div className="flex flex-col leading-tight">
-        <span className="text-sm font-semibold tracking-wide">ALYANI</span>
-        <span className="text-[9px] uppercase tracking-widest text-sidebar-foreground/60">Lavanderia</span>
+    <header className="md:hidden sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-sidebar text-sidebar-foreground px-2">
+      <div className="flex items-center gap-2">
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border">
+            <SheetTitle className="sr-only">Menu</SheetTitle>
+            <SidebarBody onNavigate={() => setOpen(false)} />
+          </SheetContent>
+        </Sheet>
+        <div className="flex flex-col leading-tight">
+          <span className="text-sm font-semibold tracking-wide">ALYANI</span>
+          <span className="text-[9px] uppercase tracking-widest text-sidebar-foreground/60">Lavanderia</span>
+        </div>
       </div>
+      <ThemeToggle />
     </header>
   );
 }

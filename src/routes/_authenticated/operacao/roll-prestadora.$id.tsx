@@ -80,13 +80,21 @@ function Page() {
         if (error) throw error;
       }
     },
-    onSuccess: () => { refetchItens(); refetch(); },
+    onSuccess: async () => { 
+      await refetchItens(); 
+      await refetch(); 
+      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const removeItem = useMutation({
     mutationFn: async (iid: string) => { const { error } = await supabase.from("rolls_prestadora_itens").delete().eq("id", iid); if (error) throw error; },
-    onSuccess: () => { refetchItens(); refetch(); },
+    onSuccess: async () => { 
+      await refetchItens(); 
+      await refetch(); 
+      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
