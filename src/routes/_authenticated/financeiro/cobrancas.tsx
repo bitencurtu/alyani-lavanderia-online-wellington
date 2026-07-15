@@ -66,7 +66,14 @@ function Page() {
       const { error } = await supabase.from("cobrancas").update(upd).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cobrancas"] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cobrancas"] });
+      qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
+      qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+      qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+      qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
+      qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 

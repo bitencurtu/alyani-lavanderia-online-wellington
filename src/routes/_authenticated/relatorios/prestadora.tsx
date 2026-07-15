@@ -26,12 +26,25 @@ function Page() {
     queryFn: async () => (await supabase.from("prestadoras").select("*").eq("status", "ativo").order("nome")).data ?? [],
   });
 
+  const { data: custos = [] } = useQuery({
+    queryKey: ["custos", prestadoraId],
+    enabled: !!prestadoraId,
+    queryFn: async () => {
+      const { data } = await supabase.from("tabela_custos")
+        .select("peca_id, valor, data_vigencia")
+        .eq("prestadora_id", prestadoraId)
+        .eq("status", "ativo")
+        .order("data_vigencia", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
   const { data: rolls = [] } = useQuery({
     queryKey: ["rel-prestadora", prestadoraId, dataInicio, dataFim],
     enabled: !!prestadoraId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
-        .select("id, numero, data_roll, total_custo, rolls_alyani_itens(quantidade, custo_total, pecas(nome))")
+        .select("id, numero, data_roll, rolls_alyani_itens(quantidade, pecas(id, nome))")
         .eq("prestadora_id", prestadoraId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -42,13 +55,39 @@ function Page() {
 
   const prestadora = (prestadoras as any[]).find((p) => p.id === prestadoraId);
 
+  const custosPorPeca = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of custos) {
+      if (!map.has(c.peca_id)) {
+        map.set(c.peca_id, Number(c.valor));
+      }
+    }
+    return map;
+  }, [custos]);
+
+  const rollsWithTotals = useMemo(() => {
+    return rolls.map((r: any) => {
+      let totalCusto = 0;
+      for (const i of r.rolls_alyani_itens ?? []) {
+        const pecaId = i.pecas?.id;
+        const custoUnit = pecaId ? custosPorPeca.get(pecaId) : 0;
+        totalCusto += (custoUnit || 0) * Number(i.quantidade);
+      }
+      return { ...r, totalCustoCalculado: totalCusto };
+    });
+  }, [rolls, custosPorPeca]);
+
   const consolidado = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; valor: number }>();
     for (const r of rolls) {
       for (const i of r.rolls_alyani_itens ?? []) {
         const nome = i.pecas?.nome ?? "—";
+        const pecaId = i.pecas?.id;
+        const custoUnit = pecaId ? custosPorPeca.get(pecaId) : 0;
+        const custoTotal = (custoUnit || 0) * Number(i.quantidade);
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
-        cur.qtd += Number(i.quantidade); cur.valor += Number(i.custo_total);
+        cur.qtd += Number(i.quantidade);
+        cur.valor += custoTotal;
         map.set(nome, cur);
       }
     }
@@ -56,7 +95,7 @@ function Page() {
     const totalQtd = linhas.reduce((s, l) => s + l.qtd, 0);
     const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
     return { linhas, totalQtd, totalValor };
-  }, [rolls]);
+  }, [rolls, custosPorPeca]);
 
   return (
     <>
@@ -124,11 +163,11 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rolls.map((r: any) => (
+                {rollsWithTotals.map((r: any) => (
                   <tr key={r.id}>
                     <td className="border border-black px-2 py-1 font-mono">{r.numero}</td>
                     <td className="border border-black px-2 py-1">{brDate(r.data_roll)}</td>
-                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.total_custo)}</td>
+                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.totalCustoCalculado)}</td>
                   </tr>
                 ))}
                 <tr className="font-semibold bg-black/5">

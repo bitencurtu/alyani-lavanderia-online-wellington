@@ -26,6 +26,19 @@ function Page() {
     queryFn: async () => (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
   });
 
+  const { data: precos = [] } = useQuery({
+    queryKey: ["precos", hotelId],
+    enabled: !!hotelId,
+    queryFn: async () => {
+      const { data } = await supabase.from("tabela_precos")
+        .select("peca_id, valor_normal, valor_expresso, data_vigencia")
+        .eq("hotel_id", hotelId)
+        .eq("status", "ativo")
+        .order("data_vigencia", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
   const { data: rolls = [] } = useQuery({
     queryKey: ["rel-cliente", hotelId, dataInicio, dataFim],
     enabled: !!hotelId,
@@ -33,9 +46,9 @@ function Page() {
       const { data, error } = await supabase
         .from("rolls_alyani")
         .select(
-          "id, numero, data_roll, data_vencimento, nf_fat, total_receita, total_custo, total_lucro, " +
+          "id, numero, data_roll, data_vencimento, nf_fat, expresso, " +
           "hoteis(nome, razao_social, cnpj, endereco, cep, inscricao), prestadoras(nome), " +
-          "rolls_alyani_itens(quantidade, valor_unit, valor_total, custo_unit, custo_total, expresso_item, pecas(id, nome))"
+          "rolls_alyani_itens(quantidade, expresso_item, pecas(id, nome))"
         )
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
@@ -48,20 +61,33 @@ function Page() {
 
   const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
 
+  const precosPorPeca = useMemo(() => {
+    const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
+    for (const p of precos) {
+      if (!map.has(p.peca_id)) {
+        map.set(p.peca_id, { valor_normal: Number(p.valor_normal), valor_expresso: Number(p.valor_expresso) });
+      }
+    }
+    return map;
+  }, [precos]);
+
   // Build consolidated data
   const consolidated = useMemo(() => {
     const pecaMap = new Map<string, { id: string; nome: string; valorUnit: number; quantidades: Map<string, number> }>();
 
-    // Collect all pecas
+    // Collect all pecas and get correct valorUnit from precosPorPeca
     for (const roll of rolls) {
       for (const item of (roll.rolls_alyani_itens ?? []) as any[]) {
         const pecaId = item.pecas?.id;
         if (!pecaId) continue;
         if (!pecaMap.has(pecaId)) {
+          const precoInfo = precosPorPeca.get(pecaId);
+          const isExpresso = item.expresso_item ?? roll.expresso ?? false;
+          const valorUnit = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
           pecaMap.set(pecaId, {
             id: pecaId,
             nome: item.pecas.nome,
-            valorUnit: Number(item.valor_unit ?? 0),
+            valorUnit: valorUnit,
             quantidades: new Map(),
           });
         }
@@ -98,15 +124,13 @@ function Page() {
       return { ...peca, totalItens, totalValor };
     });
 
-    const totalGeral = rolls.reduce((acc, roll) => acc + Number(roll.total_receita ?? 0), 0);
-
     return {
       pecas: pecasWithTotals,
       totalGeralItens,
       totalGeralValor,
-      totalGeral,
+      totalGeral: totalGeralValor,
     };
-  }, [rolls]);
+  }, [rolls, precosPorPeca]);
 
   return (
     <>

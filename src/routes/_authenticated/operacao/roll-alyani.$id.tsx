@@ -65,6 +65,16 @@ function Page() {
   const [header, setHeader] = useState<any>(null);
   useEffect(() => { if (roll) setHeader(roll); }, [roll]);
 
+  const invalidateAllRelatedQueries = () => {
+    qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
+    qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+    qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+    qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
+    qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+    qc.invalidateQueries({ queryKey: ["cobrancas"] });
+    qc.invalidateQueries({ queryKey: ["pagamentos"] });
+  };
+
   const saveHeader = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -86,6 +96,7 @@ function Page() {
       await qc.invalidateQueries({ queryKey: ["roll", id] });
       await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
       await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -104,6 +115,7 @@ function Page() {
       await refetchItens(); 
       await refetch(); 
       await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -114,6 +126,7 @@ function Page() {
       await refetchItens(); 
       await refetch(); 
       await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });

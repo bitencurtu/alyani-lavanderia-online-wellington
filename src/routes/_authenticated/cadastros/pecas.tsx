@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/cadastros/pecas")({
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/cadastros/pecas")({
   component: Page,
 });
 
-type Peca = { id: string; nome: string; status: "ativo" | "inativo" };
+type Peca = { id?: string; nome: string; status: "ativo" | "inativo" };
 
 function Page() {
   const qc = useQueryClient();
@@ -50,6 +50,15 @@ function Page() {
       }
     },
     onSuccess: () => { toast.success("Peça salva."); qc.invalidateQueries({ queryKey: ["pecas"] }); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("pecas").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Peça excluída."); qc.invalidateQueries({ queryKey: ["pecas"] }); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -90,6 +99,21 @@ function Page() {
                 </Select>
               </div>
               <DialogFooter>
+                {editing?.id && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      if (confirm("Tem certeza que deseja excluir esta peça?") && editing.id) {
+                        remove.mutate(editing.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
+                  </Button>
+                )}
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
                 <Button type="submit" disabled={save.isPending}>Salvar</Button>
               </DialogFooter>

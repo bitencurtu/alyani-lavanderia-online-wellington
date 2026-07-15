@@ -26,12 +26,25 @@ function Page() {
     queryFn: async () => (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
   });
 
+  const { data: precos = [] } = useQuery({
+    queryKey: ["precos", hotelId],
+    enabled: !!hotelId,
+    queryFn: async () => {
+      const { data } = await supabase.from("tabela_precos")
+        .select("peca_id, valor_normal, valor_expresso, data_vigencia")
+        .eq("hotel_id", hotelId)
+        .eq("status", "ativo")
+        .order("data_vigencia", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
   const { data: rolls = [] } = useQuery({
     queryKey: ["rel-hotel", hotelId, dataInicio, dataFim],
     enabled: !!hotelId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
-        .select("id, numero, data_roll, data_vencimento, nf_fat, total_receita, rolls_alyani_itens(quantidade, valor_total, pecas(nome))")
+        .select("id, numero, data_roll, data_vencimento, nf_fat, expresso, rolls_alyani_itens(quantidade, expresso_item, pecas(id, nome))")
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -42,14 +55,45 @@ function Page() {
 
   const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
 
+  const precosPorPeca = useMemo(() => {
+    const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
+    for (const p of precos) {
+      if (!map.has(p.peca_id)) {
+        map.set(p.peca_id, { valor_normal: Number(p.valor_normal), valor_expresso: Number(p.valor_expresso) });
+      }
+    }
+    return map;
+  }, [precos]);
+
+  const rollsWithTotals = useMemo(() => {
+    return rolls.map((r: any) => {
+      let totalRoll = 0;
+      for (const i of r.rolls_alyani_itens ?? []) {
+        const pecaId = i.pecas?.id;
+        const precoInfo = pecaId ? precosPorPeca.get(pecaId) : undefined;
+        const isExpresso = i.expresso_item ?? r.expresso ?? false;
+        const valorUnit = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
+        totalRoll += valorUnit * Number(i.quantidade);
+      }
+      return { ...r, totalReceitaCalculado: totalRoll };
+    });
+  }, [rolls, precosPorPeca]);
+
   const consolidado = useMemo(() => {
     // por peça
     const map = new Map<string, { nome: string; qtd: number; valor: number }>();
     for (const r of rolls) {
       for (const i of r.rolls_alyani_itens ?? []) {
         const nome = i.pecas?.nome ?? "—";
+        const pecaId = i.pecas?.id;
+        const precoInfo = pecaId ? precosPorPeca.get(pecaId) : undefined;
+        const isExpresso = i.expresso_item ?? r.expresso ?? false;
+        const valorUnit = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
+        const valorTotal = valorUnit * Number(i.quantidade);
+        
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
-        cur.qtd += Number(i.quantidade); cur.valor += Number(i.valor_total);
+        cur.qtd += Number(i.quantidade);
+        cur.valor += valorTotal;
         map.set(nome, cur);
       }
     }
@@ -57,7 +101,7 @@ function Page() {
     const totalQtd = linhas.reduce((s, l) => s + l.qtd, 0);
     const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
     return { linhas, totalQtd, totalValor };
-  }, [rolls]);
+  }, [rolls, precosPorPeca]);
 
   return (
     <>
@@ -127,13 +171,13 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rolls.map((r: any) => (
+                {rollsWithTotals.map((r: any) => (
                   <tr key={r.id}>
                     <td className="border border-black px-2 py-1 font-mono">{r.numero}</td>
                     <td className="border border-black px-2 py-1">{brDate(r.data_roll)}</td>
                     <td className="border border-black px-2 py-1">{r.nf_fat ?? "—"}</td>
                     <td className="border border-black px-2 py-1">{brDate(r.data_vencimento)}</td>
-                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.total_receita)}</td>
+                    <td className="border border-black px-2 py-1 text-right font-mono">{brl(r.totalReceitaCalculado)}</td>
                   </tr>
                 ))}
                 <tr className="font-semibold bg-black/5">

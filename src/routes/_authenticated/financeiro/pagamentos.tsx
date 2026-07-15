@@ -62,7 +62,14 @@ function Page() {
 
   const patch = useMutation({
     mutationFn: async ({ id, upd }: { id: string; upd: any }) => { const { error } = await supabase.from("pagamentos").update(upd).eq("id", id); if (error) throw error; },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pagamentos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pagamentos"] });
+      qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
+      qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+      qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+      qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
+      qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
