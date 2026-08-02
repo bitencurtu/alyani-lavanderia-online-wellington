@@ -48,7 +48,7 @@ function Page() {
         .select(
           "id, numero, data_roll, data_vencimento, nf_fat, expresso, " +
           "hoteis(nome, razao_social, cnpj, endereco, cep, inscricao), prestadoras(nome), " +
-          "rolls_alyani_itens(quantidade, expresso_item, pecas(id, nome))"
+          "rolls_alyani_itens(quantidade, valor_unit, valor_total, expresso_item, pecas(id, nome))"
         )
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
@@ -133,8 +133,27 @@ function Page() {
 
         const item = (roll.rolls_alyani_itens ?? []).find((entry: any) => entry?.pecas?.id === peca.id);
         if (item) {
-          totalValor += getItemValorTotal(item);
-        }
+  const quantidade = getNumeric(item.quantidade);
+  const valorTotalSalvo = getNumeric(item.valor_total);
+  const valorUnitSalvo = getNumeric(item.valor_unit);
+
+  const precoInfo = precosPorPeca.get(peca.id);
+  const isExpresso = item.expresso_item ?? roll.expresso ?? false;
+
+  const valorUnitTabela = precoInfo
+    ? isExpresso
+      ? precoInfo.valor_expresso
+      : precoInfo.valor_normal
+    : 0;
+
+  const valorUnit = valorUnitSalvo > 0
+    ? valorUnitSalvo
+    : valorUnitTabela;
+
+  totalValor += valorTotalSalvo > 0
+    ? valorTotalSalvo
+    : quantidade * valorUnit;
+}
       }
       totalGeralItens += totalItens;
       totalGeralValor += totalValor;
