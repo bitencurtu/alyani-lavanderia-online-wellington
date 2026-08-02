@@ -3,14 +3,13 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Building2,
-  Truck,
+  WashingMachine,
   Package,
   Tags,
   Coins,
   ClipboardList,
   ClipboardCheck,
   GitCompare,
-  Receipt,
   Wallet,
   TrendingUp,
   FileBarChart,
@@ -35,7 +34,7 @@ const groups: { label: string; items: Item[] }[] = [
     label: "Cadastros",
     items: [
       { to: "/cadastros/hoteis", label: "Hotéis", icon: Building2 },
-      { to: "/cadastros/prestadoras", label: "Prestadoras", icon: Truck },
+      { to: "/cadastros/prestadoras", label: "Prestadoras", icon: WashingMachine },
       { to: "/cadastros/pecas", label: "Peças", icon: Package },
     ],
   },
@@ -57,7 +56,6 @@ const groups: { label: string; items: Item[] }[] = [
   {
     label: "Financeiro",
     items: [
-      { to: "/financeiro/cobrancas", label: "Cobranças", icon: Receipt },
       { to: "/financeiro/pagamentos", label: "Pagamentos", icon: Wallet },
       { to: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: TrendingUp },
     ],

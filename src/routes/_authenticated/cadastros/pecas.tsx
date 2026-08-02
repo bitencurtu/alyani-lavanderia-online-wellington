@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -17,13 +17,42 @@ export const Route = createFileRoute("/_authenticated/cadastros/pecas")({
   component: Page,
 });
 
+<<<<<<< HEAD
 type Peca = { id?: string; nome: string; status: "ativo" | "inativo" };
+=======
+type Peca = { id: string; nome: string; status: "ativo" | "inativo" };
+type PecaForm = { id?: string; nome: string; status: "ativo" | "inativo" };
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
 
 function Page() {
+  const hiddenKey = "hiddenPecasIds";
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({});
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Peca | null>(null);
+  const [editing, setEditing] = useState<PecaForm | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return new Set();
+      return new Set(arr.filter((x) => typeof x === "string"));
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      setHiddenIds(new Set(arr.filter((x) => typeof x === "string")));
+    } catch {}
+  }, []);
 
   const { data = [] } = useQuery({
     queryKey: ["pecas"],
@@ -36,11 +65,11 @@ function Page() {
 
   const rows = useMemo(() => {
     const q = (filters.q ?? "").toLowerCase().trim();
-    return data.filter((p) => !q || p.nome.toLowerCase().includes(q));
-  }, [data, filters.q]);
+    return data.filter((p) => p.status === "ativo" && !hiddenIds.has(p.id) && (!q || p.nome.toLowerCase().includes(q)));
+  }, [data, filters.q, hiddenIds]);
 
   const save = useMutation({
-    mutationFn: async (h: Partial<Peca>) => {
+    mutationFn: async (h: Partial<PecaForm>) => {
       if (h.id && h.id.trim() !== "") {
         const { error } = await supabase.from("pecas").update({ nome: h.nome, status: h.status }).eq("id", h.id);
         if (error) throw error;
@@ -49,7 +78,25 @@ function Page() {
         if (error) throw error;
       }
     },
-    onSuccess: () => { toast.success("Peça salva."); qc.invalidateQueries({ queryKey: ["pecas"] }); setOpen(false); },
+    onSuccess: () => {
+      toast.success("Peça salva.");
+      qc.invalidateQueries({ queryKey: ["pecas"] });
+      qc.invalidateQueries({ queryKey: ["pecas-lite"] });
+      setOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deactivate = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("pecas").update({ status: "inativo" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Peça desativada.");
+      qc.invalidateQueries({ queryKey: ["pecas"] });
+      qc.invalidateQueries({ queryKey: ["pecas-lite"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -78,7 +125,27 @@ function Page() {
               <tr key={h.id} className="border-t hover:bg-muted/30">
                 <td className="px-4 py-2 font-medium">{h.nome}</td>
                 <td className="px-4 py-2"><span className={h.status === "ativo" ? "text-success text-xs font-medium" : "text-muted-foreground text-xs"}>{h.status}</span></td>
-                <td className="px-2 py-1 text-right"><Button variant="ghost" size="icon" onClick={() => { setEditing(h); setOpen(true); }}><Pencil className="h-4 w-4" /></Button></td>
+                <td className="px-2 py-1 text-right whitespace-nowrap">
+                  <Button variant="ghost" size="icon" onClick={() => { setEditing(h); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={deactivate.isPending}
+                    onClick={() => {
+                      setHiddenIds((prev) => {
+                        const next = new Set(prev);
+                        next.add(h.id);
+                        if (typeof window !== "undefined") {
+                          window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
+                        }
+                        return next;
+                      });
+                      deactivate.mutate(h.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">Nenhuma peça cadastrada.</td></tr>}

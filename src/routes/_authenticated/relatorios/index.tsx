@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app/page-header";
-import { FileText, Printer, Building2, Truck, ClipboardList } from "lucide-react";
+import { FileText, Printer, Building2, WashingMachine, ClipboardList } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/relatorios/")({
   head: () => ({ meta: [{ title: "Relatórios — Alyani" }] }),
@@ -10,8 +10,8 @@ export const Route = createFileRoute("/_authenticated/relatorios/")({
 const items = [
   { to: "/relatorios/hotel", label: "Relatório por Hotel", icon: Building2, desc: "Consumo mensal por peça, receita e vencimentos.", ready: true },
   { to: "/relatorios/cliente", label: "Relatório Cliente", icon: FileText, desc: "Relatório completo em A4 horizontal para cliente.", ready: true },
-  { to: "/relatorios/financeiro", label: "Relatório Financeiro", icon: FileText, desc: "Receita, custos, lucro e totais por hotel e prestadora.", ready: true },
-  { to: "/relatorios/prestadora", label: "Relatório por Prestadora", icon: Truck, desc: "Peças processadas, custos e pagamentos.", ready: true },
+  { to: "/relatorios/financeiro", label: "Receita x Despesas/Custos", icon: FileText, desc: "Receita total dos ROLs, custos totais e resultado final.", ready: true },
+  { to: "/relatorios/prestadora", label: "Relatório por Prestadora", icon: WashingMachine, desc: "Peças processadas, custos e pagamentos.", ready: true },
 ];
 
 function Page() {

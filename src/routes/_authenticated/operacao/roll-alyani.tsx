@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate, Outlet, useMatches } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -26,17 +26,36 @@ type NovoItem = {
   expresso_item: boolean;
 };
 
+function formatDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function Page() {
-  console.log("roll-alyani montado");
+  const hiddenKey = "hiddenPecasIds";
   const matches = useMatches();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
   const [open, setOpen] = useState(false);
-  const [novo, setNovo] = useState<{ hotel_id: string; prestadora_id: string; numero: string; data_roll: string; data_vencimento: string; expresso: boolean; cobrada: boolean; nf_fat: string }>({
-    hotel_id: "", prestadora_id: "", numero: "", data_roll: isoDate(), data_vencimento: "", expresso: false, cobrada: true, nf_fat: "",
+  const [novo, setNovo] = useState<{ hotel_id: string; prestadora_id: string; numero: string; data_roll: string; data_vencimento: string; expresso: boolean; nf_fat: string }>({
+    hotel_id: "", prestadora_id: "", numero: "", data_roll: isoDate(), data_vencimento: "", expresso: false, nf_fat: "",
   });
   const [novoItens, setNovoItens] = useState<NovoItem[]>([]);
+  const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setHiddenIds(new Set(arr.filter((x) => typeof x === "string")));
+      }
+    } catch {}
+  }, []);
 
   const { data: hoteis = [] } = useQuery({ queryKey: ["hoteis-lite"], queryFn: async () => (await supabase.from("hoteis").select("id,nome").eq("status", "ativo").order("nome")).data ?? [] });
   const { data: prestadoras = [] } = useQuery({ queryKey: ["prestadoras-lite"], queryFn: async () => (await supabase.from("prestadoras").select("id,nome,is_alyani").eq("status", "ativo").order("nome")).data ?? [] });
@@ -45,7 +64,7 @@ function Page() {
   const { data: rolls = [] } = useQuery({
     queryKey: ["rolls_alyani", filters],
     queryFn: async () => {
-      let q = supabase.from("rolls_alyani").select("id, numero, data_roll, data_vencimento, expresso, cobrada, nf_fat, total_receita, total_custo, total_lucro, hoteis(nome), prestadoras(nome)").order("data_roll", { ascending: false });
+      let q = supabase.from("rolls_alyani").select("id, numero, data_roll, data_vencimento, expresso, nf_fat, total_receita, total_custo, total_lucro, hoteis(nome), prestadoras(nome)").order("data_roll", { ascending: false });
       if (filters.dataInicio) q = q.gte("data_roll", filters.dataInicio);
       if (filters.dataFim) q = q.lte("data_roll", filters.dataFim);
       if (filters.hotelId) q = q.eq("hotel_id", filters.hotelId);
@@ -83,7 +102,6 @@ function Page() {
         data_roll: novo.data_roll,
         data_vencimento: novo.data_vencimento || null,
         expresso: novo.expresso,
-        cobrada: novo.cobrada,
         nf_fat: novo.nf_fat || null,
       };
       const { data: rollData, error: rollError } = await supabase.from("rolls_alyani").insert(payload as any).select("id").single();
@@ -102,7 +120,7 @@ function Page() {
 
       return rollData.id as string;
     },
-    onSuccess: (id) => {
+    onSuccess: () => {
       toast.success("Roll criado.");
       qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       setOpen(false);
@@ -121,12 +139,31 @@ function Page() {
   });
 
   // Check if any match is the child route (has the id param)
-  const isChildRoute = matches.some(match => match.params.id);
-  console.log("roll-alyani matches:", matches, "isChildRoute:", isChildRoute);
+  const isChildRoute = matches.some((match) => "id" in match.params);
   if (isChildRoute) {
-    console.log("roll-alyani: returning Outlet");
     return <Outlet />;
   }
+
+  const addNovoItem = () => {
+    setNovoItens((prev) => {
+      const idx = prev.length;
+      setTimeout(() => pecaTriggerRefs.current[idx]?.focus(), 0);
+      return [...prev, { peca_id: "", quantidade: 1, expresso_item: false }];
+    });
+  };
+
+  const handleAnoVencimentoChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    setNovo((prev) => {
+      if (!digits) {
+        return { ...prev, data_vencimento: "" };
+      }
+      const currentDate = prev.data_vencimento ? new Date(prev.data_vencimento) : new Date();
+      const nextDate = new Date(currentDate);
+      nextDate.setFullYear(Number(digits));
+      return { ...prev, data_vencimento: formatDateValue(nextDate) };
+    });
+  };
 
   return (
     <AnimatedPage>
@@ -168,6 +205,7 @@ function Page() {
       </div>
 
       <div className="rounded-md border bg-card overflow-hidden card-hover">
+        <div className="max-h-[calc(100vh-420px)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
             <tr>
@@ -197,20 +235,21 @@ function Page() {
                 <td className="px-4 py-2 text-right font-mono font-medium">{brl(r.total_lucro)}</td>
                 <td className="px-1 py-1 text-right whitespace-nowrap">
                   <Button asChild variant="ghost" size="icon"><Link to="/operacao/roll-alyani/$id" params={{ id: r.id }}><Pencil className="h-4 w-4" /></Link></Button>
-                  <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este Roll? Cobranças e pagamentos vinculados serão removidos.")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este Roll?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">Nenhum roll no período.</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={(newOpen) => { 
         setOpen(newOpen);
         if (!newOpen) setNovoItens([]); 
       }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo Roll Alyani</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -231,10 +270,20 @@ function Page() {
               <div><Label>Número</Label><Input required value={novo.numero} onChange={(e) => setNovo({ ...novo, numero: e.target.value })} /></div>
               <div><Label>NF / Fatura</Label><Input value={novo.nf_fat} onChange={(e) => setNovo({ ...novo, nf_fat: e.target.value })} /></div>
               <div><Label>Data do Roll</Label><Input type="date" required value={novo.data_roll} onChange={(e) => setNovo({ ...novo, data_roll: e.target.value })} /></div>
+              <div>
+                <Label>Ano de vencimento</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={novo.data_vencimento ? new Date(novo.data_vencimento).getFullYear().toString() : ""}
+                  onChange={(e) => handleAnoVencimentoChange(e.target.value)}
+                  placeholder="YYYY"
+                />
+              </div>
               <div><Label>Vencimento</Label><Input type="date" value={novo.data_vencimento} onChange={(e) => setNovo({ ...novo, data_vencimento: e.target.value })} /></div>
               <div className="col-span-2 flex items-center gap-6 rounded-md border p-3">
                 <label className="flex items-center gap-2 text-sm"><Switch checked={novo.expresso} onCheckedChange={(v) => setNovo({ ...novo, expresso: v })} /> Expresso</label>
-                <label className="flex items-center gap-2 text-sm"><Switch checked={novo.cobrada} onCheckedChange={(v) => setNovo({ ...novo, cobrada: v })} /> Cobrada</label>
               </div>
             </div>
 
@@ -244,8 +293,8 @@ function Page() {
                 <Button 
                   type="button" 
                   size="sm" 
-                  onClick={() => setNovoItens([...novoItens, { peca_id: "", quantidade: 1, expresso_item: false }])}>
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+                  onClick={addNovoItem}>
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar novo item
                 </Button>
               </div>
               <table className="w-full text-sm">
@@ -264,8 +313,12 @@ function Page() {
                         <Select 
                           value={item.peca_id} 
                           onValueChange={(v) => setNovoItens(novoItens.map((it, i) => i === idx ? { ...it, peca_id: v } : it))}>
-                          <SelectTrigger className="h-8"><SelectValue placeholder="Selecione…" /></SelectTrigger>
-                          <SelectContent>{(pecas as any[]).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+                          <SelectTrigger ref={(el) => { pecaTriggerRefs.current[idx] = el; }} className="h-8"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+                          <SelectContent>
+                            {(pecas as any[])
+                              .filter((p) => !hiddenIds.has(p.id) || p.id === item.peca_id)
+                              .map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </td>
                       <td className="px-2 py-1">

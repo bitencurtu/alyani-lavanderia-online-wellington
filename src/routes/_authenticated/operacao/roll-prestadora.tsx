@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate, Outlet, useMatches } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -27,11 +27,11 @@ type NovoItem = {
 function Page() {
   const matches = useMatches();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
   const [open, setOpen] = useState(false);
   const [novo, setNovo] = useState({ prestadora_id: "", numero: "", data_roll: isoDate() });
   const [novoItens, setNovoItens] = useState<NovoItem[]>([]);
+  const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const { data: prestadoras = [] } = useQuery({
     queryKey: ["prestadoras-lite"],
@@ -73,7 +73,7 @@ function Page() {
 
       return rollData.id as string;
     },
-    onSuccess: (id) => {
+    onSuccess: () => {
       toast.success("Roll criado.");
       qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
       setOpen(false);
@@ -92,8 +92,16 @@ function Page() {
   });
 
   // Check if any match is the child route (has the id param)
-  const isChildRoute = matches.some(match => match.params.id);
+  const isChildRoute = matches.some((match) => "id" in match.params);
   if (isChildRoute) return <Outlet />;
+
+  const addNovoItem = () => {
+    setNovoItens((prev) => {
+      const idx = prev.length;
+      setTimeout(() => pecaTriggerRefs.current[idx]?.focus(), 0);
+      return [...prev, { peca_id: "", quantidade: 1 }];
+    });
+  };
 
   return (
     <AnimatedPage>
@@ -112,6 +120,7 @@ function Page() {
       </FilterBar>
 
       <div className="rounded-md border bg-card overflow-hidden card-hover">
+        <div className="max-h-[calc(100vh-280px)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
             <tr>
@@ -136,13 +145,14 @@ function Page() {
             {rolls.length === 0 && <tr><td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">Nenhum roll no período.</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={(newOpen) => { 
         setOpen(newOpen);
         if (!newOpen) setNovoItens([]); 
       }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo Roll Prestadora</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -163,7 +173,7 @@ function Page() {
                 <Button 
                   type="button" 
                   size="sm" 
-                  onClick={() => setNovoItens([...novoItens, { peca_id: "", quantidade: 1 }])}>
+                  onClick={addNovoItem}>
                   <Plus className="h-4 w-4 mr-1" /> Adicionar Item
                 </Button>
               </div>
@@ -182,7 +192,7 @@ function Page() {
                         <Select 
                           value={item.peca_id} 
                           onValueChange={(v) => setNovoItens(novoItens.map((it, i) => i === idx ? { ...it, peca_id: v } : it))}>
-                          <SelectTrigger className="h-8"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+                          <SelectTrigger ref={(el) => { pecaTriggerRefs.current[idx] = el; }} className="h-8"><SelectValue placeholder="Selecione…" /></SelectTrigger>
                           <SelectContent>{(pecas as any[]).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
                         </Select>
                       </td>

@@ -28,6 +28,13 @@ type Item = {
   custo_total?: number;
 };
 
+function formatDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function Page() {
   console.log("roll-alyani.$id montado");
   const { id } = Route.useParams();
@@ -90,6 +97,7 @@ function Page() {
       const { error } = await supabase.from("rolls_alyani").update(payload).eq("id", id);
       if (error) throw error;
     },
+<<<<<<< HEAD
     onSuccess: async () => {
       toast.success("Roll atualizado. Itens recalculados.");
       // Invalidate all related queries
@@ -97,6 +105,13 @@ function Page() {
       await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
       await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       invalidateAllRelatedQueries();
+=======
+    onSuccess: () => {
+      toast.success("Roll atualizado. Itens recalculados.", { duration: 1200 });
+      void qc.invalidateQueries({ queryKey: ["roll", id] });
+      void qc.invalidateQueries({ queryKey: ["roll-itens", id] });
+      void qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -133,6 +148,20 @@ function Page() {
 
   const [novoItem, setNovoItem] = useState<Item>({ peca_id: "", quantidade: 1, expresso_item: false });
 
+  const handleAnoVencimentoChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    setHeader((prev: any) => {
+      if (!prev) return prev;
+      if (!digits) {
+        return { ...prev, data_vencimento: "" };
+      }
+      const currentDate = prev.data_vencimento ? new Date(prev.data_vencimento) : new Date();
+      const nextDate = new Date(currentDate);
+      nextDate.setFullYear(Number(digits));
+      return { ...prev, data_vencimento: formatDateValue(nextDate) };
+    });
+  };
+
   const totais = useMemo(() => {
     return {
       qtd: itens.reduce((s: number, i: any) => s + Number(i.quantidade ?? 0), 0),
@@ -159,6 +188,17 @@ function Page() {
       <div className="rounded-md border bg-card p-4 grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div><Label>Nº do Roll</Label><Input value={header.numero ?? ""} onChange={(e) => setHeader({ ...header, numero: e.target.value })} /></div>
         <div><Label>Data do Roll</Label><Input type="date" value={header.data_roll ?? ""} onChange={(e) => setHeader({ ...header, data_roll: e.target.value })} /></div>
+        <div>
+          <Label>Ano de vencimento</Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            maxLength={4}
+            value={header.data_vencimento ? new Date(header.data_vencimento).getFullYear().toString() : ""}
+            onChange={(e) => handleAnoVencimentoChange(e.target.value)}
+            placeholder="YYYY"
+          />
+        </div>
         <div><Label>Vencimento</Label><Input type="date" value={header.data_vencimento ?? ""} onChange={(e) => setHeader({ ...header, data_vencimento: e.target.value })} /></div>
         <div><Label>NF / Fatura</Label><Input value={header.nf_fat ?? ""} onChange={(e) => setHeader({ ...header, nf_fat: e.target.value })} /></div>
         <div className="md:col-span-2">
@@ -169,7 +209,6 @@ function Page() {
           </Select>
         </div>
         <div className="flex items-center gap-3 rounded-md border p-2"><Switch checked={!!header.expresso} onCheckedChange={(v) => setHeader({ ...header, expresso: v })} /><span className="text-sm">Expresso</span></div>
-        <div className="flex items-center gap-3 rounded-md border p-2"><Switch checked={!!header.cobrada} onCheckedChange={(v) => setHeader({ ...header, cobrada: v })} /><span className="text-sm">Cobrada</span></div>
       </div>
 
       <div className="rounded-md border bg-card overflow-hidden">
@@ -177,6 +216,7 @@ function Page() {
           <span className="text-sm font-medium">Itens do Roll</span>
           <span className="text-xs text-muted-foreground">Preços e custos vêm automaticamente das tabelas vigentes na data do roll.</span>
         </div>
+        <div className="max-h-[60vh] overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
             <tr>
@@ -223,6 +263,7 @@ function Page() {
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mt-4">

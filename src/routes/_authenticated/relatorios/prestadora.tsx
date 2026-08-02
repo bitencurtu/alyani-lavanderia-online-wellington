@@ -44,7 +44,11 @@ function Page() {
     enabled: !!prestadoraId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
+<<<<<<< HEAD
         .select("id, numero, data_roll, rolls_alyani_itens(quantidade, pecas(id, nome))")
+=======
+        .select("id, numero, data_roll, total_custo, rolls_alyani_itens(quantidade, custo_total, custo_unit, pecas(nome))")
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
         .eq("prestadora_id", prestadoraId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -86,8 +90,16 @@ function Page() {
         const custoUnit = pecaId ? custosPorPeca.get(pecaId) : 0;
         const custoTotal = (custoUnit || 0) * Number(i.quantidade);
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
+<<<<<<< HEAD
         cur.qtd += Number(i.quantidade);
         cur.valor += custoTotal;
+=======
+        const quantidade = Number(i.quantidade ?? 0);
+        const custoTotal = Number(i.custo_total ?? 0);
+        const custoUnit = Number(i.custo_unit ?? 0);
+        cur.qtd += quantidade;
+        cur.valor += custoTotal > 0 ? custoTotal : quantidade * custoUnit;
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
         map.set(nome, cur);
       }
     }

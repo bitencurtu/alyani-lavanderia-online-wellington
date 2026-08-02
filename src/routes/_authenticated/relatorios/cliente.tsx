@@ -61,6 +61,7 @@ function Page() {
 
   const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
 
+<<<<<<< HEAD
   const precosPorPeca = useMemo(() => {
     const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
     for (const p of precos) {
@@ -70,6 +71,19 @@ function Page() {
     }
     return map;
   }, [precos]);
+=======
+  const getNumeric = (value: unknown) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const getItemValorTotal = (item: any) => {
+    const quantidade = getNumeric(item?.quantidade);
+    const valorUnit = getNumeric(item?.valor_unit);
+    const valorTotal = getNumeric(item?.valor_total);
+    return valorTotal > 0 ? valorTotal : quantidade * valorUnit;
+  };
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
 
   // Build consolidated data
   const consolidated = useMemo(() => {
@@ -87,7 +101,11 @@ function Page() {
           pecaMap.set(pecaId, {
             id: pecaId,
             nome: item.pecas.nome,
+<<<<<<< HEAD
             valorUnit: valorUnit,
+=======
+            valorUnit: getNumeric(item.valor_unit),
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
             quantidades: new Map(),
           });
         }
@@ -101,7 +119,7 @@ function Page() {
         if (!pecaId) continue;
         const peca = pecaMap.get(pecaId);
         if (peca) {
-          peca.quantidades.set(roll.id, Number(item.quantidade ?? 0));
+          peca.quantidades.set(roll.id, getNumeric(item.quantidade));
         }
       }
     }
@@ -117,13 +135,22 @@ function Page() {
       for (const roll of rolls) {
         const qtd = peca.quantidades.get(roll.id) ?? 0;
         totalItens += qtd;
-        totalValor += qtd * peca.valorUnit;
+
+        const item = (roll.rolls_alyani_itens ?? []).find((entry: any) => entry?.pecas?.id === peca.id);
+        if (item) {
+          totalValor += getItemValorTotal(item);
+        }
       }
       totalGeralItens += totalItens;
       totalGeralValor += totalValor;
       return { ...peca, totalItens, totalValor };
     });
 
+<<<<<<< HEAD
+=======
+    const totalGeral = totalGeralValor;
+
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
     return {
       pecas: pecasWithTotals,
       totalGeralItens,
@@ -240,24 +267,24 @@ function Page() {
               <table className="w-full border-collapse border border-black text-xs" style={{ borderSpacing: 0 }}>
                 <thead style={{ backgroundColor: "#cfe8f7" }}>
                   <tr>
-                    <th className="border border-black px-1 py-0.5 text-left" rowSpan={2}>PRODUTO</th>
-                    <th className="border border-black px-1 py-0.5 text-right" rowSpan={2}>VALOR UNIT</th>
+                    <th className="border border-black px-1 py-0.5 text-left" rowSpan={2}>Item</th>
+                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Valor unitário</th>
                     {rolls.map((roll: any) => (
                       <th className="border border-black px-1 py-0.5 text-center" key={roll.id}>
-                        <div>ROL ALYANI</div>
+                        <div>ROL</div>
                         <div>{roll.numero}</div>
                         <div className="text-[7pt]">{brDate(roll.data_roll)}</div>
                       </th>
                     ))}
-                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total Soma de ITENS</th>
-                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total Soma de VALOR TOTAL À RECEBER</th>
+                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total itens</th>
+                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total a pagar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.pecas.map((peca) => (
                     <tr key={peca.id}>
                       <td className="border border-black px-1 py-0.5">{peca.nome}</td>
-                      <td className="border border-black px-1 py-0.5 text-right">{brl(peca.valorUnit)}</td>
+                      <td className="border border-black px-1 py-0.5 text-center">{brl(peca.valorUnit)}</td>
                       {rolls.map((roll: any) => {
                         const qtd = peca.quantidades.get(roll.id) ?? 0;
                         return (
@@ -266,20 +293,20 @@ function Page() {
                           </td>
                         );
                       })}
-                      <td className="border border-black px-1 py-0.5 text-right">{peca.totalItens}</td>
-                      <td className="border border-black px-1 py-0.5 text-right">{brl(peca.totalValor)}</td>
+                      <td className="border border-black px-1 py-0.5 text-center">{peca.totalItens}</td>
+                      <td className="border border-black px-1 py-0.5 text-center">{brl(peca.totalValor)}</td>
                     </tr>
                   ))}
                   {/* Rodapé Total Geral */}
-                  <tr style={{ backgroundColor: "#cfe8f7" }}>
-                    <td className="border border-black px-1 py-0.5 font-bold" colSpan={2}>Total Geral</td>
+                  <tr className="font-bold" style={{ backgroundColor: "#cfe8f7" }}>
+                    <td className="border border-black px-1 py-0.5 font-bold" colSpan={2}>Total geral</td>
                     {rolls.map((roll: any) => (
                       <td className="border border-black px-1 py-0.5 text-right" key={roll.id}>
                         {roll.rolls_alyani_itens?.reduce((acc: number, item: any) => acc + Number(item.quantidade ?? 0), 0) || ""}
                       </td>
                     ))}
-                    <td className="border border-black px-1 py-0.5 text-right font-bold">{consolidated.totalGeralItens}</td>
-                    <td className="border border-black px-1 py-0.5 text-right font-bold">{brl(consolidated.totalGeralValor)}</td>
+                    <td className="border border-black px-1 py-0.5 text-center font-bold">{consolidated.totalGeralItens}</td>
+                    <td className="border border-black px-1 py-0.5 text-center font-bold">{brl(consolidated.totalGeralValor)}</td>
                   </tr>
                 </tbody>
               </table>

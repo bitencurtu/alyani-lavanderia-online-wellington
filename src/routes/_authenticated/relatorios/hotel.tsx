@@ -44,7 +44,11 @@ function Page() {
     enabled: !!hotelId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
+<<<<<<< HEAD
         .select("id, numero, data_roll, data_vencimento, nf_fat, expresso, rolls_alyani_itens(quantidade, expresso_item, pecas(id, nome))")
+=======
+        .select("id, numero, data_roll, data_vencimento, nf_fat, total_receita, rolls_alyani_itens(quantidade, valor_total, valor_unit, pecas(nome))")
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -92,8 +96,16 @@ function Page() {
         const valorTotal = valorUnit * Number(i.quantidade);
         
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
+<<<<<<< HEAD
         cur.qtd += Number(i.quantidade);
         cur.valor += valorTotal;
+=======
+        const quantidade = Number(i.quantidade ?? 0);
+        const valorTotal = Number(i.valor_total ?? 0);
+        const valorUnit = Number(i.valor_unit ?? 0);
+        cur.qtd += quantidade;
+        cur.valor += valorTotal > 0 ? valorTotal : quantidade * valorUnit;
+>>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
         map.set(nome, cur);
       }
     }
@@ -202,13 +214,13 @@ function Page() {
                 {consolidado.linhas.map((l) => (
                   <tr key={l.nome}>
                     <td className="border border-black px-2 py-1">{l.nome}</td>
-                    <td className="border border-black px-2 py-1 text-right font-mono">{brlNumber(l.qtd)}</td>
+                    <td className="border border-black px-2 py-1 text-right font-mono">{Number(l.qtd ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</td>
                     <td className="border border-black px-2 py-1 text-right font-mono">{brl(l.valor)}</td>
                   </tr>
                 ))}
                 <tr className="font-semibold bg-black/5">
                   <td className="border border-black px-2 py-1">TOTAL</td>
-                  <td className="border border-black px-2 py-1 text-right font-mono">{brlNumber(consolidado.totalQtd)}</td>
+                  <td className="border border-black px-2 py-1 text-right font-mono">{Number(consolidado.totalQtd ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</td>
                   <td className="border border-black px-2 py-1 text-right font-mono">{brl(consolidado.totalValor)}</td>
                 </tr>
               </tbody>
