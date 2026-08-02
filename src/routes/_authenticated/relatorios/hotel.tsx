@@ -44,11 +44,7 @@ function Page() {
     enabled: !!hotelId,
     queryFn: async () => {
       const { data } = await supabase.from("rolls_alyani")
-<<<<<<< HEAD
-        .select("id, numero, data_roll, data_vencimento, nf_fat, expresso, rolls_alyani_itens(quantidade, expresso_item, pecas(id, nome))")
-=======
-        .select("id, numero, data_roll, data_vencimento, nf_fat, total_receita, rolls_alyani_itens(quantidade, valor_total, valor_unit, pecas(nome))")
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
+        .select("id, numero, data_roll, data_vencimento, nf_fat, total_receita, rolls_alyani_itens(quantidade, valor_total, valor_unit, expresso_item, pecas(id, nome))")
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -89,23 +85,12 @@ function Page() {
     for (const r of rolls) {
       for (const i of r.rolls_alyani_itens ?? []) {
         const nome = i.pecas?.nome ?? "—";
-        const pecaId = i.pecas?.id;
-        const precoInfo = pecaId ? precosPorPeca.get(pecaId) : undefined;
-        const isExpresso = i.expresso_item ?? r.expresso ?? false;
-        const valorUnit = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
-        const valorTotal = valorUnit * Number(i.quantidade);
-        
         const cur = map.get(nome) ?? { nome, qtd: 0, valor: 0 };
-<<<<<<< HEAD
-        cur.qtd += Number(i.quantidade);
-        cur.valor += valorTotal;
-=======
         const quantidade = Number(i.quantidade ?? 0);
         const valorTotal = Number(i.valor_total ?? 0);
         const valorUnit = Number(i.valor_unit ?? 0);
         cur.qtd += quantidade;
         cur.valor += valorTotal > 0 ? valorTotal : quantidade * valorUnit;
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
         map.set(nome, cur);
       }
     }

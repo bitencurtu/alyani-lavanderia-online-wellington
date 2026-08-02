@@ -17,12 +17,8 @@ export const Route = createFileRoute("/_authenticated/cadastros/pecas")({
   component: Page,
 });
 
-<<<<<<< HEAD
-type Peca = { id?: string; nome: string; status: "ativo" | "inativo" };
-=======
 type Peca = { id: string; nome: string; status: "ativo" | "inativo" };
 type PecaForm = { id?: string; nome: string; status: "ativo" | "inativo" };
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
 
 function Page() {
   const hiddenKey = "hiddenPecasIds";

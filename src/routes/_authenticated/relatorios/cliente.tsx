@@ -61,7 +61,6 @@ function Page() {
 
   const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
 
-<<<<<<< HEAD
   const precosPorPeca = useMemo(() => {
     const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
     for (const p of precos) {
@@ -71,7 +70,7 @@ function Page() {
     }
     return map;
   }, [precos]);
-=======
+
   const getNumeric = (value: unknown) => {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
@@ -83,7 +82,6 @@ function Page() {
     const valorTotal = getNumeric(item?.valor_total);
     return valorTotal > 0 ? valorTotal : quantidade * valorUnit;
   };
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
 
   // Build consolidated data
   const consolidated = useMemo(() => {
@@ -97,15 +95,12 @@ function Page() {
         if (!pecaMap.has(pecaId)) {
           const precoInfo = precosPorPeca.get(pecaId);
           const isExpresso = item.expresso_item ?? roll.expresso ?? false;
-          const valorUnit = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
+          const valorUnitFromTabela = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
+          const valorUnit = getNumeric(item.valor_unit) > 0 ? getNumeric(item.valor_unit) : valorUnitFromTabela;
           pecaMap.set(pecaId, {
             id: pecaId,
             nome: item.pecas.nome,
-<<<<<<< HEAD
-            valorUnit: valorUnit,
-=======
-            valorUnit: getNumeric(item.valor_unit),
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
+            valorUnit,
             quantidades: new Map(),
           });
         }
@@ -146,11 +141,6 @@ function Page() {
       return { ...peca, totalItens, totalValor };
     });
 
-<<<<<<< HEAD
-=======
-    const totalGeral = totalGeralValor;
-
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
     return {
       pecas: pecasWithTotals,
       totalGeralItens,

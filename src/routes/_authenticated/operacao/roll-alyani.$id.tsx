@@ -97,21 +97,12 @@ function Page() {
       const { error } = await supabase.from("rolls_alyani").update(payload).eq("id", id);
       if (error) throw error;
     },
-<<<<<<< HEAD
     onSuccess: async () => {
-      toast.success("Roll atualizado. Itens recalculados.");
-      // Invalidate all related queries
+      toast.success("Roll atualizado. Itens recalculados.", { duration: 1200 });
       await qc.invalidateQueries({ queryKey: ["roll", id] });
       await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
       await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       invalidateAllRelatedQueries();
-=======
-    onSuccess: () => {
-      toast.success("Roll atualizado. Itens recalculados.", { duration: 1200 });
-      void qc.invalidateQueries({ queryKey: ["roll", id] });
-      void qc.invalidateQueries({ queryKey: ["roll-itens", id] });
-      void qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
->>>>>>> a649a62 (Atualiza relatório de despesas e ajustes do sistema)
     },
     onError: (e: any) => toast.error(e.message),
   });
