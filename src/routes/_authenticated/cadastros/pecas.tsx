@@ -66,22 +66,128 @@ function Page() {
 
   const save = useMutation({
     mutationFn: async (h: Partial<PecaForm>) => {
-      if (h.id && h.id.trim() !== "") {
-        const { error } = await supabase.from("pecas").update({ nome: h.nome, status: h.status }).eq("id", h.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("pecas").insert({ nome: h.nome, status: h.status } as any);
-        if (error) throw error;
+  const nome = h.nome?.trim();
+
+  if (!nome) {
+    throw new Error("Informe o nome da peça.");
+  }
+
+  // Se estiver editando uma peça existente
+  if (h.id && h.id.trim() !== "") {
+    const { error } = await supabase
+      .from("pecas")
+      .update({
+        nome,
+        status: h.status,
+      })
+      .eq("id", h.id);
+
+    if (error) throw error;
+
+    return { reactivatedId: null };
+  }
+
+  // Procura uma peça com o mesmo nome, inclusive inativa
+  const { data: existingPiece, error: searchError } = await supabase
+    .from("pecas")
+    .select("id, nome, status")
+    .ilike("nome", nome)
+    .maybeSingle();
+
+  if (searchError) throw searchError;
+
+  // Se a peça estiver ativa, impede duplicidade
+  if (existingPiece?.status === "ativo") {
+    throw new Error("Já existe uma peça ativa com esse nome.");
+  }
+
+  // Se a peça existir, mas estiver inativa, reativa
+  if (existingPiece?.status === "inativo") {
+    const { error: reactivateError } = await supabase
+      .from("pecas")
+      .update({
+        nome,
+        status: "ativo",
+      })
+      .eq("id", existingPiece.id);
+
+    if (reactivateError) throw reactivateError;
+
+    // Busca todos os hotéis
+    const { data: hotels, error: hotelsError } = await supabase
+      .from("hoteis")
+      .select("id");
+
+    if (hotelsError) throw hotelsError;
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Cria preços zerados a partir da data atual
+    if (hotels && hotels.length > 0) {
+      const zeroPrices = hotels.map((hotel) => ({
+        hotel_id: hotel.id,
+        peca_id: existingPiece.id,
+        valor_normal: 0,
+        valor_expresso: 0,
+        data_vigencia: today,
+      }));
+
+      const { error: pricesError } = await supabase
+        .from("tabela_precos")
+        .upsert(zeroPrices as any, {
+          onConflict: "hotel_id,peca_id,data_vigencia",
+        });
+
+      if (pricesError) throw pricesError;
+    }
+
+    return { reactivatedId: existingPiece.id };
+  }
+
+  // Se nunca existiu, cria normalmente
+  const { error } = await supabase
+    .from("pecas")
+    .insert({
+      nome,
+      status: h.status ?? "ativo",
+    } as any);
+
+  if (error) throw error;
+
+  return { reactivatedId: null };
+},
+
+onSuccess: (result) => {
+  if (result.reactivatedId) {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+
+      next.delete(result.reactivatedId);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          hiddenKey,
+          JSON.stringify([...next]),
+        );
       }
-    },
-    onSuccess: () => {
-      toast.success("Peça salva.");
-      qc.invalidateQueries({ queryKey: ["pecas"] });
-      qc.invalidateQueries({ queryKey: ["pecas-lite"] });
-      setOpen(false);
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+
+      return next;
+    });
+
+    toast.success("Peça reativada com os valores zerados.");
+  } else {
+    toast.success("Peça salva.");
+  }
+
+  qc.invalidateQueries({ queryKey: ["pecas"] });
+  qc.invalidateQueries({ queryKey: ["pecas-lite"] });
+  qc.invalidateQueries({ queryKey: ["precos"] });
+
+  setOpen(false);
+  setEditing(null);
+},
+
+onError: (e: any) => toast.error(e.message),});
 
   const deactivate = useMutation({
     mutationFn: async (id: string) => {

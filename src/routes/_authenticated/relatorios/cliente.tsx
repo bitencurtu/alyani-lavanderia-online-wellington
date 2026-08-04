@@ -6,10 +6,32 @@ import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
-import { Printer, Download } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { brl, brlNumber, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { Download } from "lucide-react";
 import { downloadAsPdf } from "@/lib/pdf-utils";
+import {
+  buildClientReportConsolidation,
+  buildClientReportPdfPages,
+  getClientReportLinePageSummary,
+  getClientReportPageTotals,
+} from "@/lib/relatorio-cliente-calculos";
+import { toast } from "sonner";
+
+const quantityFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+function formatQuantity(value: number) {
+  return quantityFormatter.format(value);
+}
 
 export const Route = createFileRoute("/_authenticated/relatorios/cliente")({
   head: () => ({ meta: [{ title: "Relatório Cliente — Alyani" }] }),
@@ -20,22 +42,25 @@ function Page() {
   const [hotelId, setHotelId] = useState("");
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
   const [dataFim, setDataFim] = useState(lastOfMonth());
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const { data: hoteis = [] } = useQuery({
     queryKey: ["hoteis-lite"],
-    queryFn: async () => (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
   });
 
   const { data: precos = [] } = useQuery({
     queryKey: ["precos", hotelId],
     enabled: !!hotelId,
     queryFn: async () => {
-      const { data } = await supabase.from("tabela_precos")
+      const { data } = await supabase
+        .from("tabela_precos")
         .select("peca_id, valor_normal, valor_expresso, data_vigencia")
         .eq("hotel_id", hotelId)
         .eq("status", "ativo")
         .order("data_vigencia", { ascending: false });
-      return (data ?? []) as any[];
+      return data ?? [];
     },
   });
 
@@ -46,127 +71,62 @@ function Page() {
       const { data, error } = await supabase
         .from("rolls_alyani")
         .select(
-          "id, numero, data_roll, data_vencimento, nf_fat, expresso, " +
-          "hoteis(nome, razao_social, cnpj, endereco, cep, inscricao), prestadoras(nome), " +
-          "rolls_alyani_itens(quantidade, valor_unit, valor_total, expresso_item, pecas(id, nome))"
+          "id, numero, data_roll, expresso, rolls_alyani_itens(id, peca_id, quantidade, valor_unit, valor_total, pecas(id, nome))",
         )
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
         .order("data_roll");
       if (error) throw error;
-      return (data ?? []) as any[];
+      return data ?? [];
     },
   });
 
-  const hotel = (hoteis as any[]).find((h) => h.id === hotelId);
+  const hotel = hoteis.find((entry) => entry.id === hotelId);
 
   const precosPorPeca = useMemo(() => {
     const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
     for (const p of precos) {
       if (!map.has(p.peca_id)) {
-        map.set(p.peca_id, { valor_normal: Number(p.valor_normal), valor_expresso: Number(p.valor_expresso) });
+        map.set(p.peca_id, {
+          valor_normal: Number(p.valor_normal),
+          valor_expresso: Number(p.valor_expresso),
+        });
       }
     }
     return map;
   }, [precos]);
 
-  const getNumeric = (value: unknown) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : 0;
+  const consolidated = useMemo(
+    () => buildClientReportConsolidation(rolls, precosPorPeca),
+    [rolls, precosPorPeca],
+  );
+
+  const handleDownloadPdf = async () => {
+    if (!hotelId || isDownloadingPdf) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      await downloadAsPdf(
+        "report-cliente",
+        `relatorio-cliente-${hotel?.nome || Date.now()}`,
+        "landscape",
+      );
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
-  const getItemValorTotal = (item: any) => {
-    const quantidade = getNumeric(item?.quantidade);
-    const valorUnit = getNumeric(item?.valor_unit);
-    const valorTotal = getNumeric(item?.valor_total);
-    return valorTotal > 0 ? valorTotal : quantidade * valorUnit;
-  };
+  const pdfPages = useMemo(() => {
+    return buildClientReportPdfPages(rolls, consolidated.pecas);
+  }, [rolls, consolidated.pecas]);
 
-  // Build consolidated data
-  const consolidated = useMemo(() => {
-    const pecaMap = new Map<string, { id: string; nome: string; valorUnit: number; quantidades: Map<string, number> }>();
-
-    // Collect all pecas and get correct valorUnit from precosPorPeca
-    for (const roll of rolls) {
-      for (const item of (roll.rolls_alyani_itens ?? []) as any[]) {
-        const pecaId = item.pecas?.id;
-        if (!pecaId) continue;
-        if (!pecaMap.has(pecaId)) {
-          const precoInfo = precosPorPeca.get(pecaId);
-          const isExpresso = item.expresso_item ?? roll.expresso ?? false;
-          const valorUnitFromTabela = precoInfo ? (isExpresso ? precoInfo.valor_expresso : precoInfo.valor_normal) : 0;
-          const valorUnit = getNumeric(item.valor_unit) > 0 ? getNumeric(item.valor_unit) : valorUnitFromTabela;
-          pecaMap.set(pecaId, {
-            id: pecaId,
-            nome: item.pecas.nome,
-            valorUnit,
-            quantidades: new Map(),
-          });
-        }
-      }
-    }
-
-    // Fill quantities per roll
-    for (const roll of rolls) {
-      for (const item of (roll.rolls_alyani_itens ?? []) as any[]) {
-        const pecaId = item.pecas?.id;
-        if (!pecaId) continue;
-        const peca = pecaMap.get(pecaId);
-        if (peca) {
-          peca.quantidades.set(roll.id, getNumeric(item.quantidade));
-        }
-      }
-    }
-
-    // Calculate totals
-    const pecas = Array.from(pecaMap.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-    let totalGeralItens = 0;
-    let totalGeralValor = 0;
-
-    const pecasWithTotals = pecas.map((peca) => {
-      let totalItens = 0;
-      let totalValor = 0;
-      for (const roll of rolls) {
-        const qtd = peca.quantidades.get(roll.id) ?? 0;
-        totalItens += qtd;
-
-        const item = (roll.rolls_alyani_itens ?? []).find((entry: any) => entry?.pecas?.id === peca.id);
-        if (item) {
-  const quantidade = getNumeric(item.quantidade);
-  const valorTotalSalvo = getNumeric(item.valor_total);
-  const valorUnitSalvo = getNumeric(item.valor_unit);
-
-  const precoInfo = precosPorPeca.get(peca.id);
-  const isExpresso = item.expresso_item ?? roll.expresso ?? false;
-
-  const valorUnitTabela = precoInfo
-    ? isExpresso
-      ? precoInfo.valor_expresso
-      : precoInfo.valor_normal
-    : 0;
-
-  const valorUnit = valorUnitSalvo > 0
-    ? valorUnitSalvo
-    : valorUnitTabela;
-
-  totalValor += valorTotalSalvo > 0
-    ? valorTotalSalvo
-    : quantidade * valorUnit;
-}
-      }
-      totalGeralItens += totalItens;
-      totalGeralValor += totalValor;
-      return { ...peca, totalItens, totalValor };
-    });
-
-    return {
-      pecas: pecasWithTotals,
-      totalGeralItens,
-      totalGeralValor,
-      totalGeral: totalGeralValor,
-    };
-  }, [rolls, precosPorPeca]);
+  const maximumRollsOnPage = Math.max(0, ...pdfPages.map((page) => page.rolls.length));
+  const reportTableFontSize =
+    maximumRollsOnPage > 10 ? "7pt" : maximumRollsOnPage > 7 ? "7.5pt" : "9pt";
+  const useCompactPdfCells = maximumRollsOnPage > 10;
 
   return (
     <>
@@ -175,35 +135,51 @@ function Page() {
           title="Relatório Cliente"
           description="Relatório completo para cliente em formato A4 horizontal."
           actions={
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => downloadAsPdf("report-cliente", `relatorio-cliente-${hotel?.nome || Date.now()}`, "landscape")} disabled={!hotelId}>
-                <Download className="h-4 w-4 mr-1" /> Baixar PDF
-              </Button>
-              <Button size="sm" onClick={() => window.print()} disabled={!hotelId}>
-                <Printer className="h-4 w-4 mr-1" /> Imprimir
-              </Button>
-            </div>
+            <Button size="sm" onClick={handleDownloadPdf} disabled={!hotelId || isDownloadingPdf}>
+              <Download className="h-4 w-4 mr-1" />{" "}
+              {isDownloadingPdf ? "Gerando PDF…" : "Baixar PDF"}
+            </Button>
           }
         />
         <div className="rounded-md border bg-card p-3 mb-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[260px]">
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Hotel</Label>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Hotel
+            </Label>
             <Select value={hotelId} onValueChange={setHotelId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione um hotel…" /></SelectTrigger>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Selecione um hotel…" />
+              </SelectTrigger>
               <SelectContent>
-                {(hoteis as any[]).map((h) => (
-                  <SelectItem key={h.id} value={h.id}>{h.nome}</SelectItem>
+                {hoteis.map((h) => (
+                  <SelectItem key={h.id} value={h.id}>
+                    {h.nome}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data inicial</Label>
-            <Input type="date" className="h-9 w-[150px]" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Data inicial
+            </Label>
+            <Input
+              type="date"
+              className="h-9 w-[150px]"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+            />
           </div>
           <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data final</Label>
-            <Input type="date" className="h-9 w-[150px]" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Data final
+            </Label>
+            <Input
+              type="date"
+              className="h-9 w-[150px]"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -213,117 +189,248 @@ function Page() {
           Selecione um hotel para gerar o relatório.
         </div>
       ) : (
-        <div className="print-container">
-          {/* A4 Landscape Print Sheet */}
-          <div
-            id="report-cliente"
-            className="print-sheet mx-auto bg-white text-black"
-            style={{
-              width: "297mm",
-              minHeight: "210mm",
-              padding: "8mm",
-              fontFamily: "Arial, Helvetica, sans-serif",
-              fontSize: "8pt",
-              boxSizing: "border-box",
-            }}
-          >
-            {/* Cabeçalho */}
-            <div className="flex justify-between mb-4 gap-4">
-              {/* Lado Esquerdo: Tabela de Dados do Hotel */}
-              <table className="border-collapse border border-black text-xs" style={{ borderSpacing: 0 }}>
-                <tbody>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">Razão Social</td>
-                    <td className="border border-black px-1 py-0.5">{hotel?.razao_social || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">Inscrição</td>
-                    <td className="border border-black px-1 py-0.5">{hotel?.inscricao || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">CNPJ</td>
-                    <td className="border border-black px-1 py-0.5">{hotel?.cnpj || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">Endereço</td>
-                    <td className="border border-black px-1 py-0.5">{hotel?.endereco || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">CEP</td>
-                    <td className="border border-black px-1 py-0.5">{hotel?.cep || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">Período</td>
-                    <td className="border border-black px-1 py-0.5 text-blue-700">{brDate(dataInicio)} — {brDate(dataFim)}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black px-1 py-0.5 font-medium">Hotel</td>
-                    <td className="border border-black px-1 py-0.5 text-red-600 font-bold">{hotel?.nome || "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
+        <div id="report-cliente" className="print-container">
+          {pdfPages.map((page, pageIndex) => {
+            const pageRolls = page.rolls;
+            const pageRollIds = pageRolls.map((roll) => String(roll.id));
+            const rollColumnWidth = pageRolls.length > 0 ? 51 / pageRolls.length : 51;
+            const pageTotals = getClientReportPageTotals(consolidated, pageRollIds);
+            const pageLineSummaries = new Map(
+              page.items.map((peca) => [
+                peca.id,
+                getClientReportLinePageSummary(peca, pageRollIds),
+              ]),
+            );
+            const pageHasVariablePrices = Array.from(pageLineSummaries.values()).some(
+              (summary) => summary.precoVariavel,
+            );
 
-              {/* Lado Direito: Total Geral */}
-              <div className="flex flex-col items-center justify-center text-center">
-                <div className="text-lg font-bold">TOTAL</div>
-                <div className="text-sm mt-1">R$</div>
-                <div className="text-2xl font-bold mt-1">{brl(consolidated.totalGeral)}</div>
-              </div>
-            </div>
-
-            {/* Tabela Principal */}
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-black text-xs" style={{ borderSpacing: 0 }}>
-                <thead style={{ backgroundColor: "#cfe8f7" }}>
-                  <tr>
-                    <th className="border border-black px-1 py-0.5 text-left" rowSpan={2}>Item</th>
-                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Valor unitário</th>
-                    {rolls.map((roll: any) => (
-                      <th className="border border-black px-1 py-0.5 text-center" key={roll.id}>
-                        <div>ROL</div>
-                        <div>{roll.numero}</div>
-                        <div className="text-[7pt]">{brDate(roll.data_roll)}</div>
-                      </th>
-                    ))}
-                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total itens</th>
-                    <th className="border border-black px-1 py-0.5 text-center" rowSpan={2}>Total a pagar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {consolidated.pecas.map((peca) => (
-                    <tr key={peca.id}>
-                      <td className="border border-black px-1 py-0.5">{peca.nome}</td>
-                      <td className="border border-black px-1 py-0.5 text-center">{brl(peca.valorUnit)}</td>
-                      {rolls.map((roll: any) => {
-                        const qtd = peca.quantidades.get(roll.id) ?? 0;
-                        return (
-                          <td className="border border-black px-1 py-0.5 text-center" key={roll.id}>
-                            {qtd > 0 ? qtd : ""}
+            return (
+              <div
+                key={`pdf-page-${pageIndex}`}
+                data-pdf-page
+                className={`pdf-export-page print-sheet mx-auto mb-4 bg-white text-black ${useCompactPdfCells ? "pdf-many-rolls" : ""}`}
+                style={{
+                  width: "289mm",
+                  padding: "5mm",
+                  fontFamily: "Arial, Helvetica, sans-serif",
+                  fontSize: "9pt",
+                  boxSizing: "border-box",
+                }}
+              >
+                {page.showReportHeader && (
+                  <div className="flex justify-between mb-4 gap-4">
+                    <table
+                      className="pdf-client-info border-collapse border border-black text-sm"
+                      style={{ borderSpacing: 0 }}
+                    >
+                      <tbody>
+                        <tr>
+                          <td className="border border-black font-medium">Razão Social</td>
+                          <td className="border border-black">{hotel?.razao_social || "—"}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">Inscrição</td>
+                          <td className="border border-black">{hotel?.inscricao || "—"}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">CNPJ</td>
+                          <td className="border border-black">{hotel?.cnpj || "—"}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">Endereço</td>
+                          <td className="border border-black">{hotel?.endereco || "—"}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">CEP</td>
+                          <td className="border border-black">{hotel?.cep || "—"}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">Período</td>
+                          <td className="border border-black text-blue-700">
+                            {brDate(dataInicio)} — {brDate(dataFim)}
                           </td>
+                        </tr>
+                        <tr>
+                          <td className="border border-black font-medium">Hotel</td>
+                          <td className="border border-black text-red-600 font-bold">
+                            {hotel?.nome || "—"}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div className="flex min-w-[180px] flex-col items-center justify-center text-center">
+                      <div className="text-xl font-bold">TOTAL</div>
+                      <div className="text-3xl font-bold mt-2">
+                        {brlNumber(consolidated.totalGeral)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table
+                    className="pdf-client-main w-full border-collapse border border-black"
+                    style={{
+                      borderSpacing: 0,
+                      tableLayout: "fixed",
+                      fontSize: reportTableFontSize,
+                    }}
+                  >
+                    <colgroup>
+                      <col style={{ width: "18%" }} />
+                      <col style={{ width: "11%" }} />
+                      {pageRolls.map((roll) => (
+                        <col key={roll.id} style={{ width: `${rollColumnWidth}%` }} />
+                      ))}
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "12%" }} />
+                    </colgroup>
+                    <thead style={{ backgroundColor: "#cfe8f7" }}>
+                      <tr>
+                        <th className="border border-black text-left">Item</th>
+                        <th className="border border-black text-center">Valor unitário</th>
+                        {pageRolls.map((roll) => {
+                          const [day = "", month = "", year = ""] = brDate(roll.data_roll).split(
+                            "/",
+                          );
+                          return (
+                            <th
+                              className="pdf-roll-cell border border-black text-center"
+                              key={roll.id}
+                            >
+                              <div>ROL</div>
+                              <div style={{ overflowWrap: "anywhere" }}>{roll.numero}</div>
+                              <div style={{ fontSize: "0.86em" }}>
+                                {day}/{month}
+                              </div>
+                              <div style={{ fontSize: "0.86em" }}>{year}</div>
+                            </th>
+                          );
+                        })}
+                        <th className="border border-black text-center">Total itens</th>
+                        <th className="border border-black text-center">Total a pagar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {page.items.map((peca) => {
+                        const summary = pageLineSummaries.get(peca.id)!;
+
+                        return (
+                          <tr key={peca.id}>
+                            <td
+                              className="border border-black overflow-hidden"
+                              style={{ overflowWrap: "anywhere" }}
+                            >
+                              {peca.nome}
+                            </td>
+                            <td className="border border-black text-center overflow-hidden whitespace-nowrap">
+                              {summary.precosUnitarios.length === 0
+                                ? "—"
+                                : summary.precoVariavel
+                                  ? "Variável"
+                                  : brl(summary.precoUnitario ?? 0)}
+                            </td>
+                            {pageRolls.map((roll) => {
+                              const qtd = peca.quantidades.get(roll.id) ?? 0;
+                              return (
+                                <td
+                                  className="pdf-roll-cell border border-black text-center overflow-hidden whitespace-nowrap"
+                                  key={roll.id}
+                                >
+                                  {qtd > 0 ? formatQuantity(qtd) : ""}
+                                </td>
+                              );
+                            })}
+                            <td className="border border-black text-center overflow-hidden whitespace-nowrap">
+                              {formatQuantity(summary.quantidade)}
+                            </td>
+                            <td className="border border-black text-center overflow-hidden whitespace-nowrap">
+                              {brl(summary.valor)}
+                            </td>
+                          </tr>
                         );
                       })}
-                      <td className="border border-black px-1 py-0.5 text-center">{peca.totalItens}</td>
-                      <td className="border border-black px-1 py-0.5 text-center">{brl(peca.totalValor)}</td>
-                    </tr>
-                  ))}
-                  {/* Rodapé Total Geral */}
-                  <tr className="font-bold" style={{ backgroundColor: "#cfe8f7" }}>
-                    <td className="border border-black px-1 py-0.5 font-bold" colSpan={2}>Total geral</td>
-                    {rolls.map((roll: any) => (
-                      <td className="border border-black px-1 py-0.5 text-right" key={roll.id}>
-                        {roll.rolls_alyani_itens?.reduce((acc: number, item: any) => acc + Number(item.quantidade ?? 0), 0) || ""}
-                      </td>
-                    ))}
-                    <td className="border border-black px-1 py-0.5 text-center font-bold">{consolidated.totalGeralItens}</td>
-                    <td className="border border-black px-1 py-0.5 text-center font-bold">{brl(consolidated.totalGeralValor)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+                      {page.showTableTotal && (
+                        <tr className="font-bold" style={{ backgroundColor: "#cfe8f7" }}>
+                          <td className="border border-black font-bold" colSpan={2}>
+                            {pageRollIds.length === rolls.length
+                              ? "Total geral"
+                              : "Subtotal dos rolls"}
+                          </td>
+                          {pageRolls.map((roll) => (
+                            <td
+                              className="pdf-roll-cell border border-black text-center overflow-hidden whitespace-nowrap"
+                              key={roll.id}
+                            >
+                              {consolidated.totaisPorRoll.get(String(roll.id))?.quantidade
+                                ? formatQuantity(
+                                    consolidated.totaisPorRoll.get(String(roll.id))!.quantidade,
+                                  )
+                                : ""}
+                            </td>
+                          ))}
+                          <td className="border border-black text-center font-bold overflow-hidden whitespace-nowrap">
+                            {formatQuantity(pageTotals.quantidade)}
+                          </td>
+                          <td className="border border-black text-center font-bold overflow-hidden whitespace-nowrap">
+                            {brl(pageTotals.valor)}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {pageHasVariablePrices && (
+                  <div className="mt-2 text-center text-[7pt] text-black/70">
+                    “Variável” indica que a peça teve mais de um preço unitário nos rolls desta
+                    página.
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {/* Print Styles */}
           <style>{`
+            #report-cliente .pdf-client-info td {
+              padding: 2px 12px 10px !important;
+              line-height: 1.45 !important;
+              text-align: center !important;
+              vertical-align: middle !important;
+            }
+            #report-cliente .pdf-client-main th,
+            #report-cliente .pdf-client-main td {
+              padding: 4px 10px 10px !important;
+              line-height: 1.4 !important;
+              text-align: center !important;
+              vertical-align: middle !important;
+            }
+            #report-cliente .pdf-client-main .pdf-roll-cell {
+              padding-left: 6px !important;
+              padding-right: 6px !important;
+            }
+            #report-cliente .pdf-client-main thead .pdf-roll-cell {
+              overflow: visible !important;
+              white-space: normal !important;
+            }
+            #report-cliente .pdf-many-rolls .pdf-client-main th,
+            #report-cliente .pdf-many-rolls .pdf-client-main td {
+              padding: 2px 8px 8px !important;
+              line-height: 1.3 !important;
+            }
+            #report-cliente .pdf-many-rolls .pdf-client-main .pdf-roll-cell {
+              padding-left: 2px !important;
+              padding-right: 2px !important;
+            }
+            #report-cliente .pdf-client-main th > div {
+              line-height: 1.35 !important;
+              margin: 1px 0 !important;
+            }
+            #report-cliente .pdf-export-page + .pdf-export-page {
+              margin-top: 16px !important;
+            }
             @media print {
               body {
                 margin: 0;

@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brl, brlNumber, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
-import { Printer, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { downloadAsPdf } from "@/lib/pdf-utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/relatorios/prestadora")({
   head: () => ({ meta: [{ title: "Relatório por Prestadora — Alyani" }] }),
@@ -20,6 +21,7 @@ function Page() {
   const [prestadoraId, setPrestadoraId] = useState("");
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
   const [dataFim, setDataFim] = useState(lastOfMonth());
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const { data: prestadoras = [] } = useQuery({
     queryKey: ["prestadoras-lite"],
@@ -69,13 +71,33 @@ function Page() {
     return rolls.map((r: any) => {
       let totalCusto = 0;
       for (const i of r.rolls_alyani_itens ?? []) {
+        const quantidade = Number(i.quantidade ?? 0);
+        const custoTotalSalvo = Number(i.custo_total ?? 0);
+        const custoUnitSalvo = Number(i.custo_unit ?? 0);
         const pecaId = i.pecas?.id;
-        const custoUnit = pecaId ? custosPorPeca.get(pecaId) : 0;
-        totalCusto += (custoUnit || 0) * Number(i.quantidade);
+        const custoUnitTabela = pecaId ? Number(custosPorPeca.get(pecaId) ?? 0) : 0;
+        const custoUnit = custoUnitSalvo > 0 ? custoUnitSalvo : custoUnitTabela;
+        totalCusto += custoTotalSalvo > 0 ? custoTotalSalvo : custoUnit * quantidade;
       }
       return { ...r, totalCustoCalculado: totalCusto };
     });
   }, [rolls, custosPorPeca]);
+
+  const handleDownloadPdf = async () => {
+    if (!prestadoraId || isDownloadingPdf) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      await downloadAsPdf(
+        "report-prestadora",
+        `relatorio-prestadora-${prestadora?.nome || Date.now()}`,
+      );
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível gerar o PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const consolidado = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; valor: number }>();
@@ -95,21 +117,16 @@ function Page() {
     const totalQtd = linhas.reduce((s, l) => s + l.qtd, 0);
     const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
     return { linhas, totalQtd, totalValor };
-  }, [rolls, custosPorPeca]);
+  }, [rolls]);
 
   return (
     <>
       <div className="print:hidden">
         <PageHeader title="Relatório por Prestadora" description="Consolidado do período no mesmo formato da planilha oficial."
           actions={
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => downloadAsPdf("report-prestadora", `relatorio-prestadora-${prestadora?.nome || Date.now()}`)} disabled={!prestadoraId}>
-                <Download className="h-4 w-4 mr-1" /> Baixar PDF
-              </Button>
-              <Button size="sm" onClick={() => window.print()} disabled={!prestadoraId}>
-                <Printer className="h-4 w-4 mr-1" /> Imprimir
-              </Button>
-            </div>
+            <Button size="sm" onClick={handleDownloadPdf} disabled={!prestadoraId || isDownloadingPdf}>
+              <Download className="h-4 w-4 mr-1" /> {isDownloadingPdf ? "Gerando PDF…" : "Baixar PDF"}
+            </Button>
           } />
         <div className="rounded-md border bg-card p-3 mb-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[260px]">
@@ -205,9 +222,8 @@ function Page() {
             </table>
           </section>
 
-          <footer className="mt-8 pt-3 border-t border-black text-[10px] text-black/60 flex items-center justify-between">
+          <footer className="mt-8 pt-3 border-t border-black text-[10px] text-black/60">
             <span>Alyani Lavanderia — documento gerado pelo sistema</span>
-            <span>Página 1 de 1</span>
           </footer>
         </div>
       )}

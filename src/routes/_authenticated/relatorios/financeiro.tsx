@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { brl, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { Download } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/relatorios/financeiro")({
   head: () => ({ meta: [{ title: "Relatório Financeiro — Alyani" }] }),
@@ -280,8 +281,9 @@ function Page() {
     const marginRight = 10;
     const tableWidth = pageWidth - marginLeft - marginRight;
     const headerHeight = 8;
-    const rowHeight = 6.5;
-    const colWidths = [24, 28, 90, 28];
+    const minimumRowHeight = 7;
+    const lineHeight = 3.2;
+    const colWidths = [24, 32, 102, 32];
     const headers = ["DATA", "ORIGEM", "DESCRIÇÃO", "VALOR"];
     const rows = [
       ...periodRolls.map((roll: any) => {
@@ -308,6 +310,18 @@ function Page() {
       })),
     ].sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
 
+    const fitFontSize = (
+      value: string,
+      maximumWidth: number,
+      preferredSize: number,
+      minimumSize = 5.2,
+    ) => {
+      doc.setFontSize(preferredSize);
+      const textWidth = doc.getTextWidth(value);
+      if (textWidth <= maximumWidth || textWidth === 0) return preferredSize;
+      return Math.max(minimumSize, preferredSize * (maximumWidth / textWidth));
+    };
+
     const drawHeader = (y: number) => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.2);
@@ -320,17 +334,43 @@ function Page() {
       });
     };
 
-    const drawRow = (y: number, row: string[]) => {
+    const prepareRow = (row: string[]) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
+      const lines = row.map((value, index) => {
+        // Data e valor devem permanecer em uma linha e caber dentro da célula.
+        if (index === 0 || index === row.length - 1) return [value];
+        return doc.splitTextToSize(value, colWidths[index] - 2);
+      });
+      const maximumLines = Math.max(...lines.map((cellLines) => cellLines.length), 1);
+      const height = Math.max(minimumRowHeight, maximumLines * lineHeight + 2.5);
+      return { lines, height };
+    };
+
+    const drawRow = (y: number, prepared: ReturnType<typeof prepareRow>) => {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.8);
       let cursorX = marginLeft;
-      row.forEach((value, index) => {
+      prepared.lines.forEach((textLines, index) => {
         const width = colWidths[index];
-        const textLines = doc.splitTextToSize(value, width - 2);
-        const cellHeight = Math.max(rowHeight, textLines.length * 3.3);
-        doc.rect(cursorX, y, width, cellHeight);
-        const textY = y + 2.5 + (textLines.length > 1 ? 0 : 0);
-        doc.text(textLines, cursorX + 1, textY);
+        doc.rect(cursorX, y, width, prepared.height);
+        const isValueColumn = index === prepared.lines.length - 1;
+        const isSingleLineNumber = index === 0 || isValueColumn;
+
+        if (isSingleLineNumber) {
+          const value = String(textLines[0] ?? "");
+          doc.setFontSize(fitFontSize(value, width - 2.5, 6.8));
+          doc.text(
+            value,
+            isValueColumn ? cursorX + width - 1.25 : cursorX + 1.25,
+            y + prepared.height / 2 + 0.85,
+            { align: isValueColumn ? "right" : "left" },
+          );
+        } else {
+          doc.setFontSize(6.8);
+          doc.text(textLines, cursorX + 1, y + 3);
+        }
+
         cursorX += width;
       });
     };
@@ -340,6 +380,15 @@ function Page() {
     doc.setTextColor(pdfPrimaryColor[0], pdfPrimaryColor[1], pdfPrimaryColor[2]);
     doc.text("RELATÓRIO DE DESPESAS E CUSTOS", pageWidth / 2, 18, { align: "center" });
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(0, 0, 0);
+    doc.text(
+      `Período: ${formatDateForDisplay(dataInicio)} a ${formatDateForDisplay(dataFim)}`,
+      marginLeft,
+      30,
+    );
+
     const totalCosts = periodRolls.reduce((acc, roll) => acc + getRollCost(roll), 0) + totalDespesas;
 
     doc.setFillColor(pdfPrimaryColor[0], pdfPrimaryColor[1], pdfPrimaryColor[2]);
@@ -347,40 +396,66 @@ function Page() {
     doc.roundedRect(pageWidth - 70, 22, 60, 16, 2, 2, "F");
     doc.setFontSize(9);
     doc.text("TOTAL GERAL", pageWidth - 40, 28, { align: "center" });
-    doc.setFontSize(11);
-    doc.text(brl(totalCosts), pageWidth - 40, 34, { align: "center" });
+    const totalCostsText = brl(totalCosts);
+    doc.setFontSize(fitFontSize(totalCostsText, 54, 11, 7));
+    doc.text(totalCostsText, pageWidth - 40, 34, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
     let currentY = 48;
     drawHeader(currentY);
     currentY += headerHeight;
 
-    rows.forEach((row, index) => {
-      if (currentY + rowHeight > pageHeight - 18) {
+    for (const row of rows) {
+      const prepared = prepareRow(row.values);
+
+      if (currentY + prepared.height > pageHeight - 16) {
         doc.addPage();
-        currentY = 18;
+        currentY = 14;
         drawHeader(currentY);
         currentY += headerHeight;
       }
-      drawRow(currentY, row.values);
-      currentY += Math.max(rowHeight, 7);
-      if (index === rows.length - 1) {
-        const summaryHeight = 8;
-        if (currentY + summaryHeight > pageHeight - 12) {
-          doc.addPage();
-          currentY = 18;
-        }
-        doc.setFillColor(pdfPrimaryColor[0], pdfPrimaryColor[1], pdfPrimaryColor[2]);
-        doc.setTextColor(255, 255, 255);
-        doc.rect(marginLeft, currentY, tableWidth, summaryHeight, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.text(`TOTAL GERAL: ${brl(totalCosts)}`, marginLeft + 2, currentY + 5);
-        doc.setTextColor(0, 0, 0);
-      }
-    });
 
-    doc.save(`relatorio-despesas-custos-${Date.now()}.pdf`);
+      drawRow(currentY, prepared);
+      currentY += prepared.height;
+    }
+
+    if (rows.length === 0) {
+      const emptyHeight = 10;
+      doc.rect(marginLeft, currentY, tableWidth, emptyHeight);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Nenhum lançamento encontrado no período.", pageWidth / 2, currentY + 6, {
+        align: "center",
+      });
+      currentY += emptyHeight;
+    }
+
+    const summaryHeight = 8;
+    if (currentY + summaryHeight > pageHeight - 16) {
+      doc.addPage();
+      currentY = 14;
+    }
+
+    doc.setFillColor(pdfPrimaryColor[0], pdfPrimaryColor[1], pdfPrimaryColor[2]);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(marginLeft, currentY, tableWidth, summaryHeight, "F");
+    doc.setFont("helvetica", "bold");
+    const summaryText = `TOTAL GERAL: ${brl(totalCosts)}`;
+    doc.setFontSize(fitFontSize(summaryText, tableWidth - 4, 8, 6));
+    doc.text(summaryText, marginLeft + 2, currentY + 5);
+
+    const pageCount = doc.getNumberOfPages();
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(90, 90, 90);
+    for (let page = 1; page <= pageCount; page += 1) {
+      doc.setPage(page);
+      doc.text(`Página ${page} de ${pageCount}`, pageWidth - marginRight, pageHeight - 5, {
+        align: "right",
+      });
+    }
+
+    doc.save(`relatorio-despesas-custos-${dataInicio}-a-${dataFim}.pdf`);
   };
 
   return (
@@ -389,7 +464,9 @@ function Page() {
         title="Receita x Despesas/Custos"
         description="Resumo de receita total dos ROLs, custos totais e resultado final."
         actions={
-          <Button size="sm" onClick={handleExportPdf}>Exportar PDF</Button>
+          <Button size="sm" onClick={handleExportPdf}>
+            <Download className="h-4 w-4 mr-1" /> Baixar PDF
+          </Button>
         }
       />
       <div className="rounded-md border bg-card p-3 mb-4 flex flex-wrap items-end gap-3">
