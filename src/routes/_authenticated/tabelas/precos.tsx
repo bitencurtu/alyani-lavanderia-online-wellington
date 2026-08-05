@@ -23,6 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { brDate, brlNumber, isoDate } from "@/lib/format";
+import {
+  calcularValorExpressoAutomatico,
+  correspondeAoTipoDePrecoAlterado,
+  usaPrecoExpresso,
+  type TiposPrecoAlterados,
+} from "@/lib/preco-expresso";
 import { Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +44,8 @@ type Row = {
   valor_expresso: number;
   existing_id?: string;
 };
+
+type PriceUpdate = Row & TiposPrecoAlterados;
 
 type RollItem = {
   id: string;
@@ -62,7 +70,7 @@ function Page() {
   const [rows, setRows] = useState<Row[]>([]);
   const [originalRows, setOriginalRows] = useState<Row[]>([]);
 
-  const [priceUpdateQueue, setPriceUpdateQueue] = useState<Row[]>([]);
+  const [priceUpdateQueue, setPriceUpdateQueue] = useState<PriceUpdate[]>([]);
   const [priceUpdateIndex, setPriceUpdateIndex] = useState(0);
   const [selectedRollIds, setSelectedRollIds] = useState<Set<string>>(new Set());
   const [rollSearch, setRollSearch] = useState("");
@@ -130,7 +138,10 @@ function Page() {
         peca_id: piece.id,
         nome: piece.nome,
         valor_normal: Number(source?.valor_normal ?? 0),
-        valor_expresso: Number(source?.valor_expresso ?? 0),
+        valor_expresso:
+          source?.valor_expresso === null || source?.valor_expresso === undefined
+            ? calcularValorExpressoAutomatico(Number(source?.valor_normal ?? 0))
+            : Number(source.valor_expresso),
         existing_id: exact.get(piece.id)?.id,
       };
     });
@@ -144,15 +155,16 @@ function Page() {
     [originalRows],
   );
 
-  const changedRows = useMemo(
+  const changedRows = useMemo<PriceUpdate[]>(
     () =>
-      rows.filter((row) => {
+      rows.flatMap((row) => {
         const original = originalByPiece.get(row.peca_id);
-        return (
-          !original ||
-          row.valor_normal !== original.valor_normal ||
-          row.valor_expresso !== original.valor_expresso
-        );
+        const normalAlterado = !original || row.valor_normal !== original.valor_normal;
+        const expressoAlterado = !original || row.valor_expresso !== original.valor_expresso;
+
+        return normalAlterado || expressoAlterado
+          ? [{ ...row, normalAlterado, expressoAlterado }]
+          : [];
       }),
     [rows, originalByPiece],
   );
@@ -164,7 +176,7 @@ function Page() {
   }, [rows, searchTerm]);
 
   const save = useMutation({
-    mutationFn: async ({ changed }: { changed: Row[] }) => {
+    mutationFn: async ({ changed }: { changed: PriceUpdate[] }) => {
       const invalidRow = rows.find(
         (row) =>
           !Number.isFinite(row.valor_normal) ||
@@ -194,18 +206,26 @@ function Page() {
         .upsert(payload as any, { onConflict: "hotel_id,peca_id,data_vigencia" });
       if (error) throw error;
 
-      const changedWithRolls: Row[] = [];
+      const changedWithRolls: PriceUpdate[] = [];
 
       for (const changedRow of changed) {
         const { data: matchingRolls, error: rollsError } = await supabase
           .from("rolls_alyani")
-          .select("id,rolls_alyani_itens!inner(peca_id)")
+          .select("id,expresso,rolls_alyani_itens!inner(peca_id,expresso_item)")
           .eq("hotel_id", hotelId)
-          .eq("rolls_alyani_itens.peca_id", changedRow.peca_id)
-          .limit(1);
+          .eq("rolls_alyani_itens.peca_id", changedRow.peca_id);
 
         if (rollsError) throw rollsError;
-        if ((matchingRolls?.length ?? 0) > 0) changedWithRolls.push(changedRow);
+        const hasMatchingRoll = (matchingRolls ?? []).some((roll: any) =>
+          (roll.rolls_alyani_itens ?? []).some((item: any) =>
+            correspondeAoTipoDePrecoAlterado(
+              Boolean(roll.expresso),
+              Boolean(item.expresso_item),
+              changedRow,
+            ),
+          ),
+        );
+        if (hasMatchingRoll) changedWithRolls.push(changedRow);
       }
 
       return { changed, changedWithRolls };
@@ -234,6 +254,11 @@ function Page() {
   });
 
   const currentPriceChange = priceUpdateQueue[priceUpdateIndex] ?? null;
+  const currentPriceTypeLabel = currentPriceChange?.normalAlterado
+    ? currentPriceChange.expressoAlterado
+      ? "normal e expresso"
+      : "normal"
+    : "expresso";
 
   const { data: candidateRolls = [], isLoading: loadingRolls } = useQuery({
     queryKey: ["rolls-para-alterar-preco", hotelId, currentPriceChange?.peca_id],
@@ -253,15 +278,28 @@ function Page() {
     },
   });
 
+  const eligibleRolls = useMemo(() => {
+    if (!currentPriceChange) return [];
+    return candidateRolls.filter((roll) =>
+      roll.rolls_alyani_itens.some((item) =>
+        correspondeAoTipoDePrecoAlterado(
+          Boolean(roll.expresso),
+          Boolean(item.expresso_item),
+          currentPriceChange,
+        ),
+      ),
+    );
+  }, [candidateRolls, currentPriceChange]);
+
   const filteredRolls = useMemo(() => {
     const search = rollSearch.toLowerCase().trim();
-    return candidateRolls.filter((roll) => {
+    return eligibleRolls.filter((roll) => {
       if (search && !roll.numero.toLowerCase().includes(search)) return false;
       if (rollStartDate && roll.data_roll < rollStartDate) return false;
       if (rollEndDate && roll.data_roll > rollEndDate) return false;
       return true;
     });
-  }, [candidateRolls, rollSearch, rollStartDate, rollEndDate]);
+  }, [eligibleRolls, rollSearch, rollStartDate, rollEndDate]);
 
   const advancePriceUpdate = () => {
     setSelectedRollIds(new Set());
@@ -281,14 +319,27 @@ function Page() {
     mutationFn: async () => {
       if (!currentPriceChange) return;
 
-      const selectedRolls = candidateRolls.filter((roll) => selectedRollIds.has(roll.id));
+      const selectedRolls = eligibleRolls.filter((roll) => selectedRollIds.has(roll.id));
       const normalItemIds: string[] = [];
       const expressItemIds: string[] = [];
 
       for (const roll of selectedRolls) {
         for (const item of roll.rolls_alyani_itens) {
-          if (roll.expresso || item.expresso_item) expressItemIds.push(item.id);
-          else normalItemIds.push(item.id);
+          if (
+            !correspondeAoTipoDePrecoAlterado(
+              Boolean(roll.expresso),
+              Boolean(item.expresso_item),
+              currentPriceChange,
+            )
+          ) {
+            continue;
+          }
+
+          if (usaPrecoExpresso(Boolean(roll.expresso), Boolean(item.expresso_item))) {
+            expressItemIds.push(item.id);
+          } else {
+            normalItemIds.push(item.id);
+          }
         }
       }
 
@@ -434,7 +485,7 @@ function Page() {
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Peça</th>
                 <th className="text-right px-4 py-2 font-medium w-40">Valor normal</th>
-                <th className="text-right px-4 py-2 font-medium w-40">Valor expresso</th>
+                <th className="text-right px-4 py-2 font-medium w-40">Valor expresso (2×)</th>
               </tr>
             </thead>
             <tbody>
@@ -448,15 +499,20 @@ function Page() {
                       min={0}
                       className="h-8 text-right font-mono"
                       value={row.valor_normal}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const valorNormal = Number(event.target.value);
                         setRows((current) =>
                           current.map((item) =>
                             item.peca_id === row.peca_id
-                              ? { ...item, valor_normal: Number(event.target.value) }
+                              ? {
+                                  ...item,
+                                  valor_normal: valorNormal,
+                                  valor_expresso: calcularValorExpressoAutomatico(valorNormal),
+                                }
                               : item,
                           ),
-                        )
-                      }
+                        );
+                      }}
                     />
                   </td>
                   <td className="px-2 py-1">
@@ -511,8 +567,9 @@ function Page() {
           <DialogHeader>
             <DialogTitle>Atualizar preço nos rolls?</DialogTitle>
             <DialogDescription>
-              Você gostaria de alterar o preço de <strong>{currentPriceChange?.nome}</strong> em
-              algum roll deste hotel? Selecione somente os rolls que devem receber o novo preço.
+              Você gostaria de alterar o preço <strong>{currentPriceTypeLabel}</strong> de{" "}
+              <strong>{currentPriceChange?.nome}</strong> em algum roll deste hotel? Somente os
+              rolls compatíveis com o tipo de preço alterado aparecem abaixo.
             </DialogDescription>
           </DialogHeader>
 
@@ -579,18 +636,30 @@ function Page() {
                   </tr>
                 ) : (
                   filteredRolls.map((roll) => {
-                    const hasExpressItem = roll.rolls_alyani_itens.some(
-                      (item) => roll.expresso || item.expresso_item,
+                    const relevantItems = roll.rolls_alyani_itens.filter((item) =>
+                      correspondeAoTipoDePrecoAlterado(
+                        Boolean(roll.expresso),
+                        Boolean(item.expresso_item),
+                        currentPriceChange!,
+                      ),
                     );
-                    const hasNormalItem = roll.rolls_alyani_itens.some(
-                      (item) => !roll.expresso && !item.expresso_item,
+                    const hasExpressItem = relevantItems.some((item) =>
+                      usaPrecoExpresso(Boolean(roll.expresso), Boolean(item.expresso_item)),
+                    );
+                    const hasNormalItem = relevantItems.some(
+                      (item) =>
+                        !usaPrecoExpresso(Boolean(roll.expresso), Boolean(item.expresso_item)),
                     );
                     const currentValues = Array.from(
-                      new Set(roll.rolls_alyani_itens.map((item) => Number(item.valor_unit ?? 0))),
+                      new Set(relevantItems.map((item) => Number(item.valor_unit ?? 0))),
                     );
                     const newValues = [
-                      ...(hasNormalItem ? [currentPriceChange?.valor_normal ?? 0] : []),
-                      ...(hasExpressItem ? [currentPriceChange?.valor_expresso ?? 0] : []),
+                      ...(hasNormalItem && currentPriceChange?.normalAlterado
+                        ? [currentPriceChange.valor_normal]
+                        : []),
+                      ...(hasExpressItem && currentPriceChange?.expressoAlterado
+                        ? [currentPriceChange.valor_expresso]
+                        : []),
                     ].filter((value, index, values) => values.indexOf(value) === index);
                     const rollType =
                       hasExpressItem && hasNormalItem

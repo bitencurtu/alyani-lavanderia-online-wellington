@@ -8,6 +8,10 @@ import {
   type PrecoPeca,
   type RollCliente,
 } from "../src/lib/relatorio-cliente-calculos.ts";
+import {
+  calcularValorExpressoAutomatico,
+  correspondeAoTipoDePrecoAlterado,
+} from "../src/lib/preco-expresso.ts";
 
 const noPrices = new Map<string, PrecoPeca>();
 let itemSequence = 0;
@@ -106,6 +110,91 @@ test("usa tabela somente quando o registro legado não tem preço nem total", ()
   );
 
   assert.equal(report.totalGeralValor, 6);
+});
+
+test("preenche automaticamente o valor expresso com o dobro do normal", () => {
+  assert.equal(calcularValorExpressoAutomatico(1.65), 3.3);
+  assert.equal(calcularValorExpressoAutomatico(2.345), 4.69);
+  assert.equal(calcularValorExpressoAutomatico(0), 0);
+});
+
+test("alteração somente do expresso filtra rolls e itens normais", () => {
+  const alteracao = { normalAlterado: false, expressoAlterado: true };
+
+  assert.equal(correspondeAoTipoDePrecoAlterado(false, false, alteracao), false);
+  assert.equal(correspondeAoTipoDePrecoAlterado(true, false, alteracao), true);
+  assert.equal(correspondeAoTipoDePrecoAlterado(false, true, alteracao), true);
+});
+
+test("alteração normal não inclui rolls expressos e alteração dupla inclui ambos", () => {
+  const somenteNormal = { normalAlterado: true, expressoAlterado: false };
+  const ambos = { normalAlterado: true, expressoAlterado: true };
+
+  assert.equal(correspondeAoTipoDePrecoAlterado(false, false, somenteNormal), true);
+  assert.equal(correspondeAoTipoDePrecoAlterado(true, false, somenteNormal), false);
+  assert.equal(correspondeAoTipoDePrecoAlterado(false, false, ambos), true);
+  assert.equal(correspondeAoTipoDePrecoAlterado(true, false, ambos), true);
+});
+
+test("roll expresso usa o valor expresso da tabela no fallback legado", () => {
+  const prices = new Map<string, PrecoPeca>([
+    ["toalha", { valor_normal: 1.65, valor_expresso: 3.3 }],
+  ]);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "r-expresso",
+        expresso: true,
+        rolls_alyani_itens: [item("toalha", 4, null, null)],
+      },
+    ],
+    prices,
+  );
+
+  assert.equal(report.pecas[0].totalItens, 4);
+  assert.equal(report.pecas[0].totalValor, 13.2);
+  assert.equal(report.totalGeralValor, 13.2);
+});
+
+test("roll expresso preserva o valor histórico salvo no item", () => {
+  const prices = new Map<string, PrecoPeca>([["toalha", { valor_normal: 2, valor_expresso: 4 }]]);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "r-expresso-historico",
+        expresso: true,
+        rolls_alyani_itens: [item("toalha", 4, 3.3, 13.2)],
+      },
+    ],
+    prices,
+  );
+
+  assert.equal(report.pecas[0].totalValor, 13.2);
+  assert.equal(report.totalGeralValor, 13.2);
+});
+
+test("soma vários rolls expressos usando exatamente o dobro do valor normal", () => {
+  const valorNormal = 1.65;
+  const valorExpresso = calcularValorExpressoAutomatico(valorNormal);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "expresso-1",
+        expresso: true,
+        rolls_alyani_itens: [item("toalha", 10, valorExpresso, 33)],
+      },
+      {
+        id: "expresso-2",
+        expresso: true,
+        rolls_alyani_itens: [item("toalha", 7, valorExpresso, 23.1)],
+      },
+    ],
+    noPrices,
+  );
+
+  assert.equal(report.pecas[0].totalItens, 17);
+  assert.equal(report.pecas[0].totalValor, 56.1);
+  assert.equal(report.totalGeralValor, 56.1);
 });
 
 test("fallback legado usa o preço vigente na data do roll", () => {
