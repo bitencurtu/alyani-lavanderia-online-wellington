@@ -9,7 +9,6 @@ export type ItemRollCliente = {
   quantidade?: unknown;
   valor_unit?: unknown;
   valor_total?: unknown;
-  expresso_item?: unknown;
   pecas?: { id?: unknown; nome?: unknown } | null;
 };
 
@@ -25,7 +24,6 @@ export type LinhaRelatorioCliente = {
   quantidades: Map<string, number>;
   valores: Map<string, number>;
   precosUnitariosCentavos: Map<string, Set<number>>;
-  gruposPrecoPorRoll: Map<string, Map<number, GrupoPrecoInterno>>;
   quantidadeUnitsPorRoll: Map<string, number>;
   valoresCentavosPorRoll: Map<string, number>;
   totalItens: number;
@@ -46,23 +44,6 @@ export type PaginaPdfRelatorioCliente<TRoll extends RollCliente = RollCliente> =
   items: LinhaRelatorioCliente[];
   showReportHeader: boolean;
   showTableTotal: boolean;
-  rollGroupIndex: number;
-  rollGroupCount: number;
-  itemPageIndex: number;
-  itemPageCount: number;
-  isContinuation: boolean;
-};
-
-export type GrupoPrecoHistorico = {
-  precoUnitario: number;
-  quantidade: number;
-  valor: number;
-  quantidadeRolls: number;
-};
-
-type GrupoPrecoInterno = {
-  quantidadeUnits: number;
-  valorCentavos: number;
 };
 
 type LinhaInterna = {
@@ -71,7 +52,6 @@ type LinhaInterna = {
   quantidadeUnitsPorRoll: Map<string, number>;
   valoresCentavosPorRoll: Map<string, number>;
   precosUnitariosCentavos: Map<string, Set<number>>;
-  gruposPrecoPorRoll: Map<string, Map<number, GrupoPrecoInterno>>;
 };
 
 const QUANTITY_SCALE = 100;
@@ -113,7 +93,7 @@ function getFallbackUnitCents(
 ) {
   const price = precosPorPeca.get(pecaId);
   if (!price) return 0;
-  const isExpress = Boolean(item.expresso_item ?? false) || Boolean(roll.expresso ?? false);
+  const isExpress = Boolean(roll.expresso ?? false);
   return toMoneyCents(isExpress ? price.valor_expresso : price.valor_normal);
 }
 
@@ -124,6 +104,14 @@ function getEffectiveUnitCents(
   quantityUnits: number,
   precosPorPeca: ReadonlyMap<string, PrecoPeca>,
 ) {
+  // O relatório do cliente sempre usa o preço atual configurado para o hotel.
+  // O valor salvo no item fica apenas como fallback para peças sem preço ativo.
+  const currentPrice = precosPorPeca.get(pecaId);
+  if (currentPrice) {
+    const isExpress = Boolean(roll.expresso ?? false);
+    return toMoneyCents(isExpress ? currentPrice.valor_expresso : currentPrice.valor_normal);
+  }
+
   const savedUnit = nonNegativeNumber(item.valor_unit);
   const savedTotal = nonNegativeNumber(item.valor_total);
 
@@ -191,7 +179,6 @@ export function buildClientReportConsolidation(
           quantidadeUnitsPorRoll: new Map(),
           valoresCentavosPorRoll: new Map(),
           precosUnitariosCentavos: new Map(),
-          gruposPrecoPorRoll: new Map(),
         };
         lines.set(pecaId, line);
       }
@@ -208,16 +195,6 @@ export function buildClientReportConsolidation(
       const unitPrices = line.precosUnitariosCentavos.get(rollId) ?? new Set<number>();
       unitPrices.add(unitCents);
       line.precosUnitariosCentavos.set(rollId, unitPrices);
-
-      const rollPriceGroups = line.gruposPrecoPorRoll.get(rollId) ?? new Map();
-      const priceGroup = rollPriceGroups.get(unitCents) ?? {
-        quantidadeUnits: 0,
-        valorCentavos: 0,
-      };
-      priceGroup.quantidadeUnits += quantityUnits;
-      priceGroup.valorCentavos += calculatedTotalCents;
-      rollPriceGroups.set(unitCents, priceGroup);
-      line.gruposPrecoPorRoll.set(rollId, rollPriceGroups);
     }
   }
 
@@ -249,7 +226,6 @@ export function buildClientReportConsolidation(
           ]),
         ),
         precosUnitariosCentavos: line.precosUnitariosCentavos,
-        gruposPrecoPorRoll: line.gruposPrecoPorRoll,
         quantidadeUnitsPorRoll: line.quantidadeUnitsPorRoll,
         valoresCentavosPorRoll: line.valoresCentavosPorRoll,
         totalItens: fromQuantityUnits(totalQuantityUnits),
@@ -306,44 +282,20 @@ export function getClientReportLinePageSummary(
     0,
   );
   const unitPrices = new Set<number>();
-  const priceGroups = new Map<
-    number,
-    { quantidadeUnits: number; valorCentavos: number; rollIds: Set<string> }
-  >();
 
   for (const rollId of rollIds) {
     for (const unitPrice of line.precosUnitariosCentavos.get(rollId) ?? []) {
       unitPrices.add(unitPrice);
     }
-    for (const [unitPrice, rollGroup] of line.gruposPrecoPorRoll.get(rollId) ?? []) {
-      const group = priceGroups.get(unitPrice) ?? {
-        quantidadeUnits: 0,
-        valorCentavos: 0,
-        rollIds: new Set<string>(),
-      };
-      group.quantidadeUnits += rollGroup.quantidadeUnits;
-      group.valorCentavos += rollGroup.valorCentavos;
-      group.rollIds.add(rollId);
-      priceGroups.set(unitPrice, group);
-    }
   }
 
   const sortedUnitPrices = Array.from(unitPrices).sort((a, b) => a - b);
-  const gruposPreco = Array.from(priceGroups.entries())
-    .sort(([priceA], [priceB]) => priceA - priceB)
-    .map<GrupoPrecoHistorico>(([unitPrice, group]) => ({
-      precoUnitario: fromMoneyCents(unitPrice),
-      quantidade: fromQuantityUnits(group.quantidadeUnits),
-      valor: fromMoneyCents(group.valorCentavos),
-      quantidadeRolls: group.rollIds.size,
-    }));
   return {
     quantidade: fromQuantityUnits(quantityUnits),
     valor: fromMoneyCents(valueCents),
     precosUnitarios: sortedUnitPrices.map(fromMoneyCents),
     precoUnitario: sortedUnitPrices.length === 1 ? fromMoneyCents(sortedUnitPrices[0]) : null,
     precoVariavel: sortedUnitPrices.length > 1,
-    gruposPreco,
   };
 }
 
@@ -377,8 +329,8 @@ export function buildClientReportPdfPages<TRoll extends RollCliente>(
   } = {},
 ): PaginaPdfRelatorioCliente<TRoll>[] {
   const maximumRollsPerPage = Math.max(1, options.maximumRollsPerPage ?? 13);
-  const firstPageItemLimit = Math.max(1, options.firstPageItemLimit ?? 12);
-  const continuationItemLimit = Math.max(1, options.continuationItemLimit ?? 17);
+  const firstPageItemLimit = Math.max(1, options.firstPageItemLimit ?? 14);
+  const continuationItemLimit = Math.max(1, options.continuationItemLimit ?? 20);
   const rollGroups: TRoll[][] = [];
 
   if (rolls.length === 0) {
@@ -399,8 +351,7 @@ export function buildClientReportPdfPages<TRoll extends RollCliente>(
   const pages: PaginaPdfRelatorioCliente<TRoll>[] = [];
   let isFirstReportPage = true;
 
-  for (let rollGroupIndex = 0; rollGroupIndex < rollGroups.length; rollGroupIndex += 1) {
-    const rollGroup = rollGroups[rollGroupIndex];
+  for (const rollGroup of rollGroups) {
     const rollIds = new Set(rollGroup.map((roll) => String(roll.id ?? "")));
     const groupItems = items.filter((item) =>
       Array.from(rollIds).some((rollId) => item.quantidadeUnitsPorRoll.has(rollId)),
@@ -412,39 +363,24 @@ export function buildClientReportPdfPages<TRoll extends RollCliente>(
         items: [],
         showReportHeader: isFirstReportPage,
         showTableTotal: true,
-        rollGroupIndex,
-        rollGroupCount: rollGroups.length,
-        itemPageIndex: 0,
-        itemPageCount: 1,
-        isContinuation: !isFirstReportPage,
       });
       isFirstReportPage = false;
       continue;
     }
 
-    const itemChunks: LinhaRelatorioCliente[][] = [];
     let itemIndex = 0;
     while (itemIndex < groupItems.length) {
       const itemLimit = isFirstReportPage ? firstPageItemLimit : continuationItemLimit;
       const pageItems = groupItems.slice(itemIndex, itemIndex + itemLimit);
       itemIndex += pageItems.length;
 
-      itemChunks.push(pageItems);
-      isFirstReportPage = false;
-    }
-
-    for (let itemPageIndex = 0; itemPageIndex < itemChunks.length; itemPageIndex += 1) {
       pages.push({
         rolls: rollGroup,
-        items: itemChunks[itemPageIndex],
-        showReportHeader: pages.length === 0,
-        showTableTotal: itemPageIndex === itemChunks.length - 1,
-        rollGroupIndex,
-        rollGroupCount: rollGroups.length,
-        itemPageIndex,
-        itemPageCount: itemChunks.length,
-        isContinuation: pages.length > 0,
+        items: pageItems,
+        showReportHeader: isFirstReportPage,
+        showTableTotal: itemIndex >= groupItems.length,
       });
+      isFirstReportPage = false;
     }
   }
 

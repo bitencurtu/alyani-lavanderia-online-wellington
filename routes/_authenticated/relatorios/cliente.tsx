@@ -71,7 +71,7 @@ function Page() {
       const { data, error } = await supabase
         .from("rolls_alyani")
         .select(
-          "id, numero, data_roll, expresso, rolls_alyani_itens(id, peca_id, quantidade, valor_unit, valor_total, expresso_item, pecas(id, nome))",
+          "id, numero, data_roll, expresso, rolls_alyani_itens(id, peca_id, quantidade, valor_unit, valor_total, pecas(id, nome))",
         )
         .eq("hotel_id", hotelId)
         .gte("data_roll", dataInicio)
@@ -122,27 +122,6 @@ function Page() {
   const pdfPages = useMemo(() => {
     return buildClientReportPdfPages(rolls, consolidated.pecas);
   }, [rolls, consolidated.pecas]);
-
-  const reportRollIds = useMemo(() => rolls.map((roll) => String(roll.id)), [rolls]);
-  const globalLineSummaries = useMemo(
-    () =>
-      new Map(
-        consolidated.pecas.map((peca) => [
-          peca.id,
-          getClientReportLinePageSummary(peca, reportRollIds),
-        ]),
-      ),
-    [consolidated.pecas, reportRollIds],
-  );
-  const firstPageByItemId = useMemo(() => {
-    const firstPages = new Map<string, number>();
-    pdfPages.forEach((page, pageIndex) => {
-      page.items.forEach((item) => {
-        if (!firstPages.has(item.id)) firstPages.set(item.id, pageIndex);
-      });
-    });
-    return firstPages;
-  }, [pdfPages]);
 
   const maximumRollsOnPage = Math.max(0, ...pdfPages.map((page) => page.rolls.length));
   const reportTableFontSize =
@@ -222,12 +201,9 @@ function Page() {
                 getClientReportLinePageSummary(peca, pageRollIds),
               ]),
             );
-            const priceChangeNotes = page.items
-              .filter((item) => firstPageByItemId.get(item.id) === pageIndex)
-              .map((item) => ({ item, summary: globalLineSummaries.get(item.id)! }))
-              .filter(({ summary }) => summary.precoVariavel);
-            const firstRollNumber = pageRolls[0]?.numero;
-            const lastRollNumber = pageRolls.at(-1)?.numero;
+            const pageHasVariablePrices = Array.from(pageLineSummaries.values()).some(
+              (summary) => summary.precoVariavel,
+            );
 
             return (
               <div
@@ -293,24 +269,6 @@ function Page() {
                   </div>
                 )}
 
-                {page.isContinuation && (
-                  <div className="pdf-continuation mb-2 border border-black bg-[#eef6fb] px-3 py-2 text-[8pt]">
-                    <div className="font-bold">
-                      Continuação do relatório — grupo de ROLs {page.rollGroupIndex + 1} de{" "}
-                      {page.rollGroupCount}
-                      {page.itemPageCount > 1
-                        ? ` • bloco de itens ${page.itemPageIndex + 1} de ${page.itemPageCount}`
-                        : ""}
-                    </div>
-                    <div>
-                      {firstRollNumber && lastRollNumber
-                        ? `Esta página considera somente os ROLs ${firstRollNumber} a ${lastRollNumber}. `
-                        : ""}
-                      Os subtotais não repetem valores de outras páginas.
-                    </div>
-                  </div>
-                )}
-
                 <div className="overflow-x-auto">
                   <table
                     className="pdf-client-main w-full border-collapse border border-black"
@@ -358,7 +316,6 @@ function Page() {
                     <tbody>
                       {page.items.map((peca) => {
                         const summary = pageLineSummaries.get(peca.id)!;
-                        const historicalSummary = globalLineSummaries.get(peca.id)!;
 
                         return (
                           <tr key={peca.id}>
@@ -369,15 +326,11 @@ function Page() {
                               {peca.nome}
                             </td>
                             <td className="border border-black text-center overflow-hidden whitespace-nowrap">
-                              {historicalSummary.precosUnitarios.length === 0 ? (
-                                "—"
-                              ) : (
-                                <div className="flex flex-col">
-                                  {historicalSummary.precosUnitarios.map((price) => (
-                                    <span key={price}>{brl(price)}</span>
-                                  ))}
-                                </div>
-                              )}
+                              {summary.precosUnitarios.length === 0
+                                ? "—"
+                                : summary.precoVariavel
+                                  ? summary.precosUnitarios.map((valor) => brl(valor)).join(" / ")
+                                  : brl(summary.precoUnitario ?? 0)}
                             </td>
                             {pageRolls.map((roll) => {
                               const qtd = peca.quantidades.get(roll.id) ?? 0;
@@ -429,21 +382,10 @@ function Page() {
                     </tbody>
                   </table>
                 </div>
-                {priceChangeNotes.length > 0 && (
-                  <div className="pdf-price-notes mt-2 border border-black/40 bg-[#fffbea] px-2 py-1 text-[7pt] text-black">
-                    <div className="font-bold">Observação sobre alteração de preços:</div>
-                    {priceChangeNotes.map(({ item, summary }) => (
-                      <div key={item.id}>
-                        <span className="font-bold">{item.nome}:</span>{" "}
-                        {summary.gruposPreco
-                          .map(
-                            (group) =>
-                              `${formatQuantity(group.quantidade)} peça(s) em ${group.quantidadeRolls} ROL(s) × ${brl(group.precoUnitario)} = ${brl(group.valor)}`,
-                          )
-                          .join("; ")}
-                        . <span className="font-bold">Total: {brl(summary.valor)}.</span>
-                      </div>
-                    ))}
+                {pageHasVariablePrices && (
+                  <div className="mt-2 text-center text-[7pt] text-black/70">
+                    “Variável” indica que a peça teve mais de um preço unitário nos rolls desta
+                    página.
                   </div>
                 )}
               </div>

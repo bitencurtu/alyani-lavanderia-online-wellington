@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildClientReportConsolidation,
+  buildClientReportPdfPages,
   getClientReportLinePageSummary,
   getClientReportPageTotals,
   type PrecoPeca,
@@ -72,6 +73,10 @@ test("identifica preço variável sem falsificar o valor unitário", () => {
   assert.equal(summary.precoVariavel, true);
   assert.equal(summary.precoUnitario, null);
   assert.deepEqual(summary.precosUnitarios, [1.65, 1.8]);
+  assert.deepEqual(summary.gruposPreco, [
+    { precoUnitario: 1.65, quantidade: 2, valor: 3.3, quantidadeRolls: 1 },
+    { precoUnitario: 1.8, quantidade: 3, valor: 5.4, quantidadeRolls: 1 },
+  ]);
 });
 
 test("preserva preço histórico zero e não usa o preço atual", () => {
@@ -128,6 +133,64 @@ test("mantém precisão para quantidades decimais e centavos", () => {
 
   assert.equal(report.totalGeralItens, 1.5);
   assert.equal(report.totalGeralValor, 2.48);
+});
+
+test("agrupa dez rolls pelos preços históricos e soma os subtotais", () => {
+  const rolls = Array.from({ length: 10 }, (_, index) =>
+    roll(`r${index + 1}`, [
+      item(
+        "fronha",
+        index < 4 ? 10 : 20,
+        index < 4 ? 1.6 : 1.7,
+        index < 4 ? 16 : 34,
+      ),
+    ]),
+  );
+  const report = buildClientReportConsolidation(rolls, noPrices);
+  const summary = getClientReportLinePageSummary(
+    report.pecas[0],
+    rolls.map((entry) => String(entry.id)),
+  );
+
+  assert.equal(summary.quantidade, 160);
+  assert.equal(summary.valor, 268);
+  assert.deepEqual(summary.gruposPreco, [
+    { precoUnitario: 1.6, quantidade: 40, valor: 64, quantidadeRolls: 4 },
+    { precoUnitario: 1.7, quantidade: 120, valor: 204, quantidadeRolls: 6 },
+  ]);
+});
+
+test("paginação não repete rolls entre grupos nem itens entre blocos", () => {
+  const rolls = Array.from({ length: 14 }, (_, index) =>
+    roll(`r${index + 1}`, [item(`peca-${index}`, 1, 2, 2)]),
+  );
+  const report = buildClientReportConsolidation(rolls, noPrices);
+  const pages = buildClientReportPdfPages(rolls, report.pecas, {
+    maximumRollsPerPage: 7,
+    firstPageItemLimit: 3,
+    continuationItemLimit: 3,
+  });
+
+  const rollsByGroup = new Map<number, Set<string>>();
+  const itemsByGroup = new Map<number, Set<string>>();
+  for (const page of pages) {
+    const groupRolls = rollsByGroup.get(page.rollGroupIndex) ?? new Set<string>();
+    page.rolls.forEach((entry) => groupRolls.add(String(entry.id)));
+    rollsByGroup.set(page.rollGroupIndex, groupRolls);
+
+    const groupItems = itemsByGroup.get(page.rollGroupIndex) ?? new Set<string>();
+    for (const entry of page.items) {
+      assert.equal(groupItems.has(entry.id), false);
+      groupItems.add(entry.id);
+    }
+    itemsByGroup.set(page.rollGroupIndex, groupItems);
+  }
+
+  const allGroupedRolls = Array.from(rollsByGroup.values()).flatMap((ids) => Array.from(ids));
+  assert.equal(new Set(allGroupedRolls).size, 14);
+  assert.equal(allGroupedRolls.length, 14);
+  assert.equal(pages[0].isContinuation, false);
+  assert.equal(pages.slice(1).every((page) => page.isContinuation), true);
 });
 
 test("confere invariantes em centenas de itens, duplicidades e preços diferentes", () => {
