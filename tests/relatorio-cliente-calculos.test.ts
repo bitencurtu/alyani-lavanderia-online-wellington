@@ -197,13 +197,13 @@ test("soma vários rolls expressos usando exatamente o dobro do valor normal", (
   assert.equal(report.totalGeralValor, 56.1);
 });
 
-test("fallback legado usa o preço vigente na data do roll", () => {
+test("fallback legado usa o preço atual mesmo quando a data do roll é antiga", () => {
   const prices = new Map<string, PrecoPeca[]>([
     [
       "fronha",
       [
-        { valor_normal: 1.7, valor_expresso: 2.55, data_vigencia: "2026-08-01" },
-        { valor_normal: 1.6, valor_expresso: 2.4, data_vigencia: "2026-07-01" },
+        { valor_normal: 1.7, valor_expresso: 3.4, data_vigencia: "2001-01-01" },
+        { valor_normal: 1.6, valor_expresso: 3.2, data_vigencia: "2000-01-01" },
       ],
     ],
   ]);
@@ -211,15 +211,61 @@ test("fallback legado usa o preço vigente na data do roll", () => {
     [
       {
         id: "r1",
-        data_roll: "2026-07-15",
+        data_roll: "1999-07-15",
         rolls_alyani_itens: [item("fronha", 10, null, null)],
       },
     ],
     prices,
   );
 
-  assert.equal(report.totalGeralValor, 16);
-  assert.equal(report.pecas[0].totalValor, 16);
+  assert.equal(report.totalGeralValor, 17);
+  assert.equal(report.pecas[0].totalValor, 17);
+});
+
+test("peça nova em roll antigo usa o preço atual e ignora preço futuro", () => {
+  const prices = new Map<string, PrecoPeca[]>([
+    [
+      "uber-99",
+      [
+        { valor_normal: 12, valor_expresso: 24, data_vigencia: "2000-01-01" },
+        { valor_normal: 15, valor_expresso: 30, data_vigencia: "2999-01-01" },
+      ],
+    ],
+  ]);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "roll-antigo",
+        data_roll: "1999-07-19",
+        rolls_alyani_itens: [item("uber-99", 2, null, null)],
+      },
+    ],
+    prices,
+  );
+
+  assert.equal(report.pecas[0].totalItens, 2);
+  assert.equal(report.pecas[0].totalValor, 24);
+  assert.equal(report.totalGeralValor, 24);
+});
+
+test("peça expressa nova em roll antigo usa o valor expresso atual", () => {
+  const prices = new Map<string, PrecoPeca[]>([
+    ["uber-99", [{ valor_normal: 12, valor_expresso: 24, data_vigencia: "2000-01-01" }]],
+  ]);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "roll-antigo-expresso",
+        data_roll: "1999-07-19",
+        expresso: true,
+        rolls_alyani_itens: [item("uber-99", 2, null, null)],
+      },
+    ],
+    prices,
+  );
+
+  assert.equal(report.pecas[0].totalValor, 48);
+  assert.equal(report.totalGeralValor, 48);
 });
 
 test("subtotais das páginas somam exatamente o total geral", () => {

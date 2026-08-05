@@ -321,7 +321,7 @@ function Page() {
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <span className="text-sm font-medium">Itens do Roll</span>
           <span className="text-xs text-muted-foreground">
-            Preços e custos vêm automaticamente das tabelas vigentes na data do roll.
+            Ao adicionar uma peça, o sistema usa os preços e custos vigentes hoje.
           </span>
         </div>
         <div className="max-h-[60vh] overflow-auto">

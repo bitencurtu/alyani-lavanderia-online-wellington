@@ -107,6 +107,14 @@ function fromQuantityUnits(value: number) {
   return value / QUANTITY_SCALE;
 }
 
+function getTodayIsoDate() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getFallbackUnitCents(
   pecaId: string,
   item: ItemRollCliente,
@@ -119,13 +127,15 @@ function getFallbackUnitCents(
       ? configuredPrices
       : [configuredPrices]
     : [];
-  const rollDate = String(roll.data_roll ?? "");
-  const price = prices
-    .filter((entry) => {
-      const effectiveDate = String(entry.data_vigencia ?? "");
-      return !rollDate || !effectiveDate || effectiveDate <= rollDate;
-    })
-    .sort((a, b) => String(b.data_vigencia ?? "").localeCompare(String(a.data_vigencia ?? "")))[0];
+  const sortedPrices = [...prices].sort((a, b) =>
+    String(a.data_vigencia ?? "").localeCompare(String(b.data_vigencia ?? "")),
+  );
+  const today = getTodayIsoDate();
+  const currentPrices = sortedPrices.filter((entry) => {
+    const effectiveDate = String(entry.data_vigencia ?? "");
+    return !effectiveDate || effectiveDate <= today;
+  });
+  const price = currentPrices.at(-1);
   if (!price) return 0;
   const isExpress = Boolean(item.expresso_item ?? false) || Boolean(roll.expresso ?? false);
   return toMoneyCents(isExpress ? price.valor_expresso : price.valor_normal);
