@@ -36,10 +36,10 @@ function roll(id: string, items: ReturnType<typeof item>[]): RollCliente {
 }
 
 test("recalcula valor total por quantidade vezes valor unitário", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("banho", 3, 1.65, 999)]),
-    roll("r2", [item("banho", 2, 1.65, 3.3)]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("banho", 3, 1.65, 999)]), roll("r2", [item("banho", 2, 1.65, 3.3)])],
+    noPrices,
+  );
 
   assert.equal(report.pecas[0].totalItens, 5);
   assert.equal(report.pecas[0].totalValor, 8.25);
@@ -48,12 +48,10 @@ test("recalcula valor total por quantidade vezes valor unitário", () => {
 });
 
 test("soma entradas duplicadas da mesma peça dentro do mesmo roll", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [
-      item("piso", 2, 2, 4),
-      item("piso", 3, 2, 6),
-    ]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("piso", 2, 2, 4), item("piso", 3, 2, 6)])],
+    noPrices,
+  );
 
   assert.equal(report.pecas.length, 1);
   assert.equal(report.pecas[0].quantidades.get("r1"), 5);
@@ -62,10 +60,10 @@ test("soma entradas duplicadas da mesma peça dentro do mesmo roll", () => {
 });
 
 test("identifica preço variável sem falsificar o valor unitário", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("fronha", 2, 1.65, 3.3)]),
-    roll("r2", [item("fronha", 3, 1.8, 5.4)]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("fronha", 2, 1.65, 3.3)]), roll("r2", [item("fronha", 3, 1.8, 5.4)])],
+    noPrices,
+  );
   const summary = getClientReportLinePageSummary(report.pecas[0], ["r1", "r2"]);
 
   assert.equal(summary.quantidade, 5);
@@ -80,21 +78,18 @@ test("identifica preço variável sem falsificar o valor unitário", () => {
 });
 
 test("preserva preço histórico zero e não usa o preço atual", () => {
-  const prices = new Map<string, PrecoPeca>([
-    ["manta", { valor_normal: 9, valor_expresso: 12 }],
-  ]);
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("manta", 4, 0, 0)]),
-  ], prices);
+  const prices = new Map<string, PrecoPeca>([["manta", { valor_normal: 9, valor_expresso: 12 }]]);
+  const report = buildClientReportConsolidation([roll("r1", [item("manta", 4, 0, 0)])], prices);
 
   assert.equal(report.totalGeralValor, 0);
   assert.equal(report.pecas[0].valores.get("r1"), 0);
 });
 
 test("recupera preço unitário de registro legado pelo total salvo", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("cobertor", 4, null, 10)]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("cobertor", 4, null, 10)])],
+    noPrices,
+  );
   const summary = getClientReportLinePageSummary(report.pecas[0], ["r1"]);
 
   assert.equal(summary.precoUnitario, 2.5);
@@ -105,18 +100,47 @@ test("usa tabela somente quando o registro legado não tem preço nem total", ()
   const prices = new Map<string, PrecoPeca>([
     ["edredom", { valor_normal: 2.5, valor_expresso: 3 }],
   ]);
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("edredom", 2, null, null, { expresso_item: true })]),
-  ], prices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("edredom", 2, null, null, { expresso_item: true })])],
+    prices,
+  );
 
   assert.equal(report.totalGeralValor, 6);
 });
 
+test("fallback legado usa o preço vigente na data do roll", () => {
+  const prices = new Map<string, PrecoPeca[]>([
+    [
+      "fronha",
+      [
+        { valor_normal: 1.7, valor_expresso: 2.55, data_vigencia: "2026-08-01" },
+        { valor_normal: 1.6, valor_expresso: 2.4, data_vigencia: "2026-07-01" },
+      ],
+    ],
+  ]);
+  const report = buildClientReportConsolidation(
+    [
+      {
+        id: "r1",
+        data_roll: "2026-07-15",
+        rolls_alyani_itens: [item("fronha", 10, null, null)],
+      },
+    ],
+    prices,
+  );
+
+  assert.equal(report.totalGeralValor, 16);
+  assert.equal(report.pecas[0].totalValor, 16);
+});
+
 test("subtotais das páginas somam exatamente o total geral", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("banho", 10, 1.65, 16.5), item("piso", 3, 2, 6)]),
-    roll("r2", [item("banho", 5, 1.8, 9), item("piso", 4, 2, 8)]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [
+      roll("r1", [item("banho", 10, 1.65, 16.5), item("piso", 3, 2, 6)]),
+      roll("r2", [item("banho", 5, 1.8, 9), item("piso", 4, 2, 8)]),
+    ],
+    noPrices,
+  );
   const firstPage = getClientReportPageTotals(report, ["r1"]);
   const secondPage = getClientReportPageTotals(report, ["r2"]);
 
@@ -127,9 +151,10 @@ test("subtotais das páginas somam exatamente o total geral", () => {
 });
 
 test("mantém precisão para quantidades decimais e centavos", () => {
-  const report = buildClientReportConsolidation([
-    roll("r1", [item("especial", 1.5, 1.65, 2.48)]),
-  ], noPrices);
+  const report = buildClientReportConsolidation(
+    [roll("r1", [item("especial", 1.5, 1.65, 2.48)])],
+    noPrices,
+  );
 
   assert.equal(report.totalGeralItens, 1.5);
   assert.equal(report.totalGeralValor, 2.48);
@@ -138,12 +163,7 @@ test("mantém precisão para quantidades decimais e centavos", () => {
 test("agrupa dez rolls pelos preços históricos e soma os subtotais", () => {
   const rolls = Array.from({ length: 10 }, (_, index) =>
     roll(`r${index + 1}`, [
-      item(
-        "fronha",
-        index < 4 ? 10 : 20,
-        index < 4 ? 1.6 : 1.7,
-        index < 4 ? 16 : 34,
-      ),
+      item("fronha", index < 4 ? 10 : 20, index < 4 ? 1.6 : 1.7, index < 4 ? 16 : 34),
     ]),
   );
   const report = buildClientReportConsolidation(rolls, noPrices);
@@ -190,7 +210,10 @@ test("paginação não repete rolls entre grupos nem itens entre blocos", () => 
   assert.equal(new Set(allGroupedRolls).size, 14);
   assert.equal(allGroupedRolls.length, 14);
   assert.equal(pages[0].isContinuation, false);
-  assert.equal(pages.slice(1).every((page) => page.isContinuation), true);
+  assert.equal(
+    pages.slice(1).every((page) => page.isContinuation),
+    true,
+  );
 });
 
 test("confere invariantes em centenas de itens, duplicidades e preços diferentes", () => {
@@ -216,24 +239,22 @@ test("confere invariantes em centenas de itens, duplicidades e preços diferente
       const savedTotal = random() < 0.2 ? 9999 : correctCents / 100;
 
       items.push(item(pecaId, quantidade, valorUnit, savedTotal));
-      expectedQuantityByPiece.set(
-        pecaId,
-        (expectedQuantityByPiece.get(pecaId) ?? 0) + quantidade,
-      );
-      expectedCentsByPiece.set(
-        pecaId,
-        (expectedCentsByPiece.get(pecaId) ?? 0) + correctCents,
-      );
+      expectedQuantityByPiece.set(pecaId, (expectedQuantityByPiece.get(pecaId) ?? 0) + quantidade);
+      expectedCentsByPiece.set(pecaId, (expectedCentsByPiece.get(pecaId) ?? 0) + correctCents);
     }
 
     generatedRolls.push(roll(`roll-${rollIndex}`, items));
   }
 
   const report = buildClientReportConsolidation(generatedRolls, noPrices);
-  const expectedTotalQuantity = Array.from(expectedQuantityByPiece.values())
-    .reduce((total, value) => total + value, 0);
-  const expectedTotalCents = Array.from(expectedCentsByPiece.values())
-    .reduce((total, value) => total + value, 0);
+  const expectedTotalQuantity = Array.from(expectedQuantityByPiece.values()).reduce(
+    (total, value) => total + value,
+    0,
+  );
+  const expectedTotalCents = Array.from(expectedCentsByPiece.values()).reduce(
+    (total, value) => total + value,
+    0,
+  );
 
   assert.equal(report.totalGeralItens, expectedTotalQuantity);
   assert.equal(report.totalGeralValor, expectedTotalCents / 100);

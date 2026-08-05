@@ -1,6 +1,7 @@
 export type PrecoPeca = {
   valor_normal: number;
   valor_expresso: number;
+  data_vigencia?: unknown;
 };
 
 export type ItemRollCliente = {
@@ -15,6 +16,7 @@ export type ItemRollCliente = {
 
 export type RollCliente = {
   id?: unknown;
+  data_roll?: unknown;
   expresso?: unknown;
   rolls_alyani_itens?: ItemRollCliente[] | null;
 };
@@ -109,9 +111,21 @@ function getFallbackUnitCents(
   pecaId: string,
   item: ItemRollCliente,
   roll: RollCliente,
-  precosPorPeca: ReadonlyMap<string, PrecoPeca>,
+  precosPorPeca: ReadonlyMap<string, PrecoPeca | readonly PrecoPeca[]>,
 ) {
-  const price = precosPorPeca.get(pecaId);
+  const configuredPrices = precosPorPeca.get(pecaId);
+  const prices = configuredPrices
+    ? Array.isArray(configuredPrices)
+      ? configuredPrices
+      : [configuredPrices]
+    : [];
+  const rollDate = String(roll.data_roll ?? "");
+  const price = prices
+    .filter((entry) => {
+      const effectiveDate = String(entry.data_vigencia ?? "");
+      return !rollDate || !effectiveDate || effectiveDate <= rollDate;
+    })
+    .sort((a, b) => String(b.data_vigencia ?? "").localeCompare(String(a.data_vigencia ?? "")))[0];
   if (!price) return 0;
   const isExpress = Boolean(item.expresso_item ?? false) || Boolean(roll.expresso ?? false);
   return toMoneyCents(isExpress ? price.valor_expresso : price.valor_normal);
@@ -122,7 +136,7 @@ function getEffectiveUnitCents(
   item: ItemRollCliente,
   roll: RollCliente,
   quantityUnits: number,
-  precosPorPeca: ReadonlyMap<string, PrecoPeca>,
+  precosPorPeca: ReadonlyMap<string, PrecoPeca | readonly PrecoPeca[]>,
 ) {
   const savedUnit = nonNegativeNumber(item.valor_unit);
   const savedTotal = nonNegativeNumber(item.valor_total);
@@ -161,7 +175,7 @@ function getPecaIdentity(item: ItemRollCliente, fallbackIndex: number) {
 
 export function buildClientReportConsolidation(
   rolls: readonly RollCliente[],
-  precosPorPeca: ReadonlyMap<string, PrecoPeca>,
+  precosPorPeca: ReadonlyMap<string, PrecoPeca | readonly PrecoPeca[]>,
 ): ConsolidadoRelatorioCliente {
   const lines = new Map<string, LinhaInterna>();
   let divergenciasCorrigidas = 0;

@@ -41,7 +41,9 @@ type Row = {
 
 type RollItem = {
   id: string;
+  peca_id: string;
   valor_unit: number;
+  expresso_item: boolean;
 };
 
 type RollOption = {
@@ -163,7 +165,19 @@ function Page() {
 
   const save = useMutation({
     mutationFn: async ({ changed }: { changed: Row[] }) => {
-      const payload = rows.map((row) => {
+      const invalidRow = rows.find(
+        (row) =>
+          !Number.isFinite(row.valor_normal) ||
+          !Number.isFinite(row.valor_expresso) ||
+          row.valor_normal < 0 ||
+          row.valor_expresso < 0,
+      );
+      if (invalidRow) {
+        throw new Error(`Informe valores válidos e não negativos para ${invalidRow.nome}.`);
+      }
+
+      const rowsToSave = changed.length > 0 ? changed : rows;
+      const payload = rowsToSave.map((row) => {
         const item: any = {
           hotel_id: hotelId,
           peca_id: row.peca_id,
@@ -227,7 +241,9 @@ function Page() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rolls_alyani")
-        .select("id,numero,data_roll,expresso,rolls_alyani_itens!inner(id,valor_unit,peca_id)")
+        .select(
+          "id,numero,data_roll,expresso,rolls_alyani_itens!inner(id,valor_unit,peca_id,expresso_item)",
+        )
         .eq("hotel_id", hotelId)
         .eq("rolls_alyani_itens.peca_id", currentPriceChange!.peca_id)
         .order("data_roll", { ascending: false });
@@ -271,7 +287,7 @@ function Page() {
 
       for (const roll of selectedRolls) {
         for (const item of roll.rolls_alyani_itens) {
-          if (roll.expresso) expressItemIds.push(item.id);
+          if (roll.expresso || item.expresso_item) expressItemIds.push(item.id);
           else normalItemIds.push(item.id);
         }
       }
@@ -307,6 +323,7 @@ function Page() {
       await qc.invalidateQueries({ queryKey: ["rel-hotel"] });
       await qc.invalidateQueries({ queryKey: ["rel-cliente"] });
       await qc.invalidateQueries({ queryKey: ["cobrancas"] });
+      await qc.invalidateQueries({ queryKey: ["rolls-para-alterar-preco"] });
       advancePriceUpdate();
     },
     onError: (error: any) => toast.error(error.message),
@@ -562,11 +579,25 @@ function Page() {
                   </tr>
                 ) : (
                   filteredRolls.map((roll) => {
-                    const isExpress = roll.expresso;
-                    const currentValue = roll.rolls_alyani_itens[0]?.valor_unit ?? 0;
-                    const newValue = isExpress
-                      ? (currentPriceChange?.valor_expresso ?? 0)
-                      : (currentPriceChange?.valor_normal ?? 0);
+                    const hasExpressItem = roll.rolls_alyani_itens.some(
+                      (item) => roll.expresso || item.expresso_item,
+                    );
+                    const hasNormalItem = roll.rolls_alyani_itens.some(
+                      (item) => !roll.expresso && !item.expresso_item,
+                    );
+                    const currentValues = Array.from(
+                      new Set(roll.rolls_alyani_itens.map((item) => Number(item.valor_unit ?? 0))),
+                    );
+                    const newValues = [
+                      ...(hasNormalItem ? [currentPriceChange?.valor_normal ?? 0] : []),
+                      ...(hasExpressItem ? [currentPriceChange?.valor_expresso ?? 0] : []),
+                    ].filter((value, index, values) => values.indexOf(value) === index);
+                    const rollType =
+                      hasExpressItem && hasNormalItem
+                        ? "Misto"
+                        : hasExpressItem
+                          ? "Expresso"
+                          : "Normal";
 
                     return (
                       <tr key={roll.id} className="border-t">
@@ -578,12 +609,12 @@ function Page() {
                         </td>
                         <td className="px-4 py-2 font-mono">{roll.numero}</td>
                         <td className="px-4 py-2">{brDate(roll.data_roll)}</td>
-                        <td className="px-4 py-2">{isExpress ? "Expresso" : "Normal"}</td>
+                        <td className="px-4 py-2">{rollType}</td>
                         <td className="px-4 py-2 text-right font-mono">
-                          R$ {brlNumber(currentValue)}
+                          {currentValues.map((value) => `R$ ${brlNumber(value)}`).join(" / ")}
                         </td>
                         <td className="px-4 py-2 text-right font-mono font-medium">
-                          R$ {brlNumber(newValue)}
+                          {newValues.map((value) => `R$ ${brlNumber(value)}`).join(" / ")}
                         </td>
                       </tr>
                     );

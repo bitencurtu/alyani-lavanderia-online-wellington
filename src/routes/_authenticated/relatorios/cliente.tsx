@@ -85,14 +85,18 @@ function Page() {
   const hotel = hoteis.find((entry) => entry.id === hotelId);
 
   const precosPorPeca = useMemo(() => {
-    const map = new Map<string, { valor_normal: number; valor_expresso: number }>();
+    const map = new Map<
+      string,
+      Array<{ valor_normal: number; valor_expresso: number; data_vigencia: string }>
+    >();
     for (const p of precos) {
-      if (!map.has(p.peca_id)) {
-        map.set(p.peca_id, {
-          valor_normal: Number(p.valor_normal),
-          valor_expresso: Number(p.valor_expresso),
-        });
-      }
+      const history = map.get(p.peca_id) ?? [];
+      history.push({
+        valor_normal: Number(p.valor_normal),
+        valor_expresso: Number(p.valor_expresso),
+        data_vigencia: p.data_vigencia,
+      });
+      map.set(p.peca_id, history);
     }
     return map;
   }, [precos]);
@@ -358,7 +362,6 @@ function Page() {
                     <tbody>
                       {page.items.map((peca) => {
                         const summary = pageLineSummaries.get(peca.id)!;
-                        const historicalSummary = globalLineSummaries.get(peca.id)!;
 
                         return (
                           <tr key={peca.id}>
@@ -369,11 +372,11 @@ function Page() {
                               {peca.nome}
                             </td>
                             <td className="border border-black text-center overflow-hidden whitespace-nowrap">
-                              {historicalSummary.precosUnitarios.length === 0 ? (
+                              {summary.precosUnitarios.length === 0 ? (
                                 "—"
                               ) : (
                                 <div className="flex flex-col">
-                                  {historicalSummary.precosUnitarios.map((price) => (
+                                  {summary.precosUnitarios.map((price) => (
                                     <span key={price}>{brl(price)}</span>
                                   ))}
                                 </div>

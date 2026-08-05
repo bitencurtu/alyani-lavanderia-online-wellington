@@ -31,6 +31,7 @@ type Item = {
   valor_total?: number;
   custo_unit?: number;
   custo_total?: number;
+  preco_manual?: boolean;
 };
 
 function formatDateValue(date: Date) {
@@ -135,10 +136,19 @@ function Page() {
 
   const upsertItem = useMutation({
     mutationFn: async (it: Item) => {
+      if (!it.peca_id) throw new Error("Selecione uma peça.");
+      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) {
+        throw new Error("A quantidade deve ser maior que zero.");
+      }
+
       if (it.id) {
         const { error } = await supabase
           .from("rolls_alyani_itens")
-          .update({ peca_id: it.peca_id, quantidade: it.quantidade })
+          .update({
+            peca_id: it.peca_id,
+            quantidade: it.quantidade,
+            preco_manual: it.preco_manual ?? false,
+          } as any)
           .eq("id", it.id);
         if (error) throw error;
       } else {
@@ -332,7 +342,13 @@ function Page() {
                   key={it.id}
                   it={it}
                   pecas={pecas as any[]}
-                  onSave={(u) => upsertItem.mutate({ ...u, id: it.id })}
+                  onSave={(u) =>
+                    upsertItem.mutate({
+                      ...u,
+                      id: it.id,
+                      preco_manual: u.peca_id === it.peca_id ? Boolean(it.preco_manual) : false,
+                    })
+                  }
                   onRemove={() => removeItem.mutate(it.id)}
                 />
               ))}
@@ -358,7 +374,7 @@ function Page() {
                   <Input
                     className="h-8 text-right font-mono"
                     type="number"
-                    min={0}
+                    min={1}
                     step="1"
                     value={novoItem.quantidade}
                     onChange={(e) =>
@@ -460,7 +476,8 @@ function ItemRow({
         <Input
           className="h-8 text-right font-mono"
           type="number"
-          min={0}
+          min={1}
+          step="1"
           value={local.quantidade}
           onChange={(e) => setLocal({ ...local, quantidade: Number(e.target.value) })}
           onBlur={() => dirty && onSave(local)}

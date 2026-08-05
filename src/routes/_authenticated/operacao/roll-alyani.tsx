@@ -152,6 +152,13 @@ function Page() {
 
   const create = useMutation({
     mutationFn: async () => {
+      const invalidItem = novoItens.find(
+        (item) => !item.peca_id || !Number.isFinite(item.quantidade) || item.quantidade <= 0,
+      );
+      if (invalidItem) {
+        throw new Error("Todos os itens precisam ter uma peça e quantidade maior que zero.");
+      }
+
       const payload = {
         hotel_id: novo.hotel_id,
         prestadora_id: novo.prestadora_id || null,
@@ -556,7 +563,7 @@ function Page() {
                         <Input
                           className="h-8 text-right font-mono"
                           type="number"
-                          min={0}
+                          min={1}
                           step="1"
                           value={item.quantidade}
                           onChange={(e) =>
