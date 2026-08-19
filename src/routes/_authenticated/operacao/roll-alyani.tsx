@@ -44,6 +44,19 @@ function formatDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatRevenuePercent(value: number, receita: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
+    return "0,00%";
+  }
+
+  return `${percentFormatter.format((value * 100) / receita)}%`;
+}
+
 function Page() {
   const hiddenKey = "hiddenPecasIds";
   const matches = useMatches();
@@ -315,15 +328,30 @@ function Page() {
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Receita</div>
-          <div className="text-xl font-semibold mt-1">{brl(totals.receita)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(totals.receita)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {totals.receita === 0 ? "0,00%" : "100,00%"}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Custos</div>
-          <div className="text-xl font-semibold mt-1">{brl(totals.custo)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(totals.custo)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.custo, totals.receita)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Lucro</div>
-          <div className="text-xl font-semibold mt-1">{brl(totals.lucro)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(totals.lucro)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.lucro, totals.receita)}
+            </span>
+          </div>
         </div>
       </div>
 

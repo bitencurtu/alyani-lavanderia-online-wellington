@@ -315,6 +315,21 @@ function Page() {
     }
   };
 
+  const openPriceUpdateForRow = (row: Row) => {
+    setPriceUpdateQueue([
+      {
+        ...row,
+        normalAlterado: true,
+        expressoAlterado: true,
+      },
+    ]);
+    setPriceUpdateIndex(0);
+    setSelectedRollIds(new Set());
+    setRollSearch("");
+    setRollStartDate("");
+    setRollEndDate("");
+  };
+
   const applyPriceToRolls = useMutation({
     mutationFn: async () => {
       if (!currentPriceChange) return;
@@ -491,7 +506,24 @@ function Page() {
             <tbody>
               {filteredRows.map((row) => (
                 <tr key={row.peca_id} className="border-t">
-                  <td className="px-4 py-1.5">{row.nome}</td>
+                  <td className="px-4 py-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{row.nome}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0"
+                        disabled={
+                          row.valor_normal !== originalByPiece.get(row.peca_id)?.valor_normal ||
+                          row.valor_expresso !== originalByPiece.get(row.peca_id)?.valor_expresso
+                        }
+                        onClick={() => openPriceUpdateForRow(row)}
+                      >
+                        Aplicar nos rolls
+                      </Button>
+                    </div>
+                  </td>
                   <td className="px-2 py-1">
                     <Input
                       type="number"

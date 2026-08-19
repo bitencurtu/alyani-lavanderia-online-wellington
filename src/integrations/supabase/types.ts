@@ -386,12 +386,15 @@ export type Database = {
       rolls_alyani_itens: {
         Row: {
           created_at: string
+          custo_data_referencia: string
           custo_total: number
           custo_unit: number
           diferenca_receita: number
           expresso_item: boolean
           id: string
           peca_id: string
+          preco_data_referencia: string
+          preco_manual: boolean
           quantidade: number
           roll_id: string
           updated_at: string
@@ -400,12 +403,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custo_data_referencia?: string
           custo_total?: number
           custo_unit?: number
           diferenca_receita?: number
           expresso_item?: boolean
           id?: string
           peca_id: string
+          preco_data_referencia?: string
+          preco_manual?: boolean
           quantidade?: number
           roll_id: string
           updated_at?: string
@@ -414,12 +420,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custo_data_referencia?: string
           custo_total?: number
           custo_unit?: number
           diferenca_receita?: number
           expresso_item?: boolean
           id?: string
           peca_id?: string
+          preco_data_referencia?: string
+          preco_manual?: boolean
           quantidade?: number
           roll_id?: string
           updated_at?: string
