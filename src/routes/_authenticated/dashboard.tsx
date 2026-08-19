@@ -21,16 +21,31 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatRevenuePercent(value: number, receita: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
+    return "0,00%";
+  }
+
+  return `${percentFormatter.format((value * 100) / receita)}%`;
+}
+
 function Card({
   label,
   value,
   icon: Icon,
   hint,
+  percentage,
 }: {
   label: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   hint?: string;
+  percentage?: string;
 }) {
   return (
     <div className="rounded-md border bg-card p-4 transition-smooth hover-scale hover:shadow-md">
@@ -40,7 +55,14 @@ function Card({
         </span>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-2 flex items-baseline justify-between gap-3">
+        <span className="text-2xl font-semibold tracking-tight">{value}</span>
+        {percentage && (
+          <span className="font-mono text-sm font-semibold text-muted-foreground">
+            {percentage}
+          </span>
+        )}
+      </div>
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   );
@@ -108,9 +130,24 @@ function Dashboard() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card label="Rolls" value={String(totals.qtd)} icon={ClipboardList} />
-        <Card label="Faturamento" value={brl(totals.receita)} icon={Receipt} />
-        <Card label="Pagamentos" value={brl(totals.custo)} icon={Wallet} />
-        <Card label="Lucro" value={brl(totals.lucro)} icon={TrendingUp} />
+        <Card
+          label="Faturamento"
+          value={brl(totals.receita)}
+          icon={Receipt}
+          percentage={totals.receita === 0 ? "0,00%" : "100,00%"}
+        />
+        <Card
+          label="Pagamentos"
+          value={brl(totals.custo)}
+          icon={Wallet}
+          percentage={formatRevenuePercent(totals.custo, totals.receita)}
+        />
+        <Card
+          label="Lucro"
+          value={brl(totals.lucro)}
+          icon={TrendingUp}
+          percentage={formatRevenuePercent(totals.lucro, totals.receita)}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">

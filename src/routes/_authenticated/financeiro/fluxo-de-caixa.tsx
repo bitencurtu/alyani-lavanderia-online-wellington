@@ -19,6 +19,19 @@ export const Route = createFileRoute("/_authenticated/financeiro/fluxo-de-caixa"
   component: Page,
 });
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatRevenuePercent(value: number, receita: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
+    return "0,00%";
+  }
+
+  return `${percentFormatter.format((value * 100) / receita)}%`;
+}
+
 function Page() {
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
   const [dataFim, setDataFim] = useState(lastOfMonth());
@@ -86,8 +99,17 @@ function Page() {
 
     const lucroRealizado = recebido - pago;
     const lucroPrevisto = recebido + aReceber - pago - aPagar;
+    const receitaTotal = recebido + aReceber;
 
-    return { recebido, aReceber, pago, aPagar, lucroRealizado, lucroPrevisto };
+    return {
+      recebido,
+      aReceber,
+      pago,
+      aPagar,
+      lucroRealizado,
+      lucroPrevisto,
+      receitaTotal,
+    };
   }, [rolls]);
 
   return (
@@ -163,37 +185,69 @@ function Page() {
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Recebido
           </div>
-          <div className="text-2xl font-bold text-green-600">{brl(totals.recebido)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-green-600">{brl(totals.recebido)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.recebido, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Contas a Receber
           </div>
-          <div className="text-2xl font-bold text-yellow-600">{brl(totals.aReceber)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-yellow-600">{brl(totals.aReceber)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.aReceber, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Pago
           </div>
-          <div className="text-2xl font-bold text-red-600">{brl(totals.pago)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-red-600">{brl(totals.pago)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.pago, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Contas a Pagar
           </div>
-          <div className="text-2xl font-bold text-orange-600">{brl(totals.aPagar)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-orange-600">{brl(totals.aPagar)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.aPagar, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Lucro Realizado
           </div>
-          <div className="text-2xl font-bold text-emerald-700">{brl(totals.lucroRealizado)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-emerald-700">
+              {brl(totals.lucroRealizado)}
+            </span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.lucroRealizado, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             Lucro Previsto
           </div>
-          <div className="text-2xl font-bold text-blue-700">{brl(totals.lucroPrevisto)}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-2xl font-bold text-blue-700">{brl(totals.lucroPrevisto)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(totals.lucroPrevisto, totals.receitaTotal)}
+            </span>
+          </div>
         </div>
       </div>
 
