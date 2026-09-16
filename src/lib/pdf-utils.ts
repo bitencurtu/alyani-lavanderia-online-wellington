@@ -97,8 +97,14 @@ function applyPdfSafeColors(clonedDocument: Document, elementId: string) {
     #${safeElementId} td {
       min-width: 0 !important;
       max-width: 100% !important;
-      overflow: hidden !important;
+      /*
+       * html2canvas pode calcular a caixa da fonte alguns pixels menor que os
+       * glifos. Com overflow hidden, isso cortava a metade inferior do texto
+       * das tabelas no PDF (principalmente em células com leading-tight).
+       */
+      overflow: visible !important;
       overflow-wrap: anywhere !important;
+      line-height: 1.35 !important;
       vertical-align: middle !important;
     }
     #${safeElementId} .font-mono {
