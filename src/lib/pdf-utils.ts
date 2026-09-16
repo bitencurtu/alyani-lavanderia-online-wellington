@@ -20,7 +20,9 @@ function getSafeBreakPoints(element: HTMLElement, canvasHeight: number) {
   const renderedHeight = Math.max(element.scrollHeight, elementRect.height);
   const scaleY = canvasHeight / renderedHeight;
 
-  return Array.from(element.querySelectorAll("tr, thead, header, section, footer"))
+  return Array.from(
+    element.querySelectorAll("tr, thead, header, section, footer"),
+  )
     .map((node) => {
       const rect = node.getBoundingClientRect();
       return Math.round((rect.bottom - elementRect.top) * scaleY);
@@ -40,11 +42,19 @@ function addPageNumbers(pdf: jsPDF) {
 
   for (let page = 1; page <= pageCount; page += 1) {
     pdf.setPage(page);
-    pdf.text(`Página ${page} de ${pageCount}`, pageWidth - 7, pageHeight - 4, { align: "right" });
+    pdf.text(
+      `Página ${page} de ${pageCount}`,
+      pageWidth - 7,
+      pageHeight - 4,
+      { align: "right" },
+    );
   }
 }
 
-function applyPdfSafeColors(clonedDocument: Document, elementId: string) {
+function applyPdfSafeColors(
+  clonedDocument: Document,
+  elementId: string,
+) {
   const safeElementId = elementId.replace(/[^a-zA-Z0-9-_]/g, "");
   const root = clonedDocument.documentElement;
   const body = clonedDocument.body;
@@ -75,8 +85,10 @@ function applyPdfSafeColors(clonedDocument: Document, elementId: string) {
   }
 
   const style = clonedDocument.createElement("style");
+
   style.textContent = `
-    #${safeElementId}, #${safeElementId} * {
+    #${safeElementId},
+    #${safeElementId} * {
       box-sizing: border-box !important;
       color: #000000 !important;
       border-color: #000000 !important;
@@ -85,69 +97,95 @@ function applyPdfSafeColors(clonedDocument: Document, elementId: string) {
       box-shadow: none !important;
       text-shadow: none !important;
     }
+
     #${safeElementId} {
       background-color: #ffffff !important;
     }
+
     #${safeElementId} table {
       border-collapse: collapse !important;
       border-spacing: 0 !important;
       max-width: 100% !important;
     }
+
     #${safeElementId} th,
     #${safeElementId} td {
       min-width: 0 !important;
       max-width: 100% !important;
+
       /*
-       * html2canvas pode calcular a caixa da fonte alguns pixels menor que os
-       * glifos. Com overflow hidden, isso cortava a metade inferior do texto
-       * das tabelas no PDF (principalmente em células com leading-tight).
+       * Evita que o html2canvas corte a parte inferior
+       * das letras durante a geração do PDF.
        */
       overflow: visible !important;
       overflow-wrap: anywhere !important;
       line-height: 1.35 !important;
       vertical-align: middle !important;
     }
+
+    #${safeElementId} th[class~="border"],
+    #${safeElementId} td[class~="border"] {
+      /*
+       * Mantém a altura original da linha e desloca
+       * visualmente o texto 2px para cima.
+       */
+      padding-top: 2px !important;
+      padding-bottom: 6px !important;
+    }
+
     #${safeElementId} .font-mono {
       font-family: Arial, Helvetica, sans-serif !important;
       font-variant-numeric: tabular-nums !important;
       letter-spacing: -0.01em !important;
     }
+
     #${safeElementId} .text-right,
     #${safeElementId} .text-center {
       font-variant-numeric: tabular-nums !important;
     }
+
     #${safeElementId} [class~="bg-white"] {
       background-color: #ffffff !important;
     }
+
     #${safeElementId} [class~="bg-black"] {
       background-color: #000000 !important;
       color: #ffffff !important;
     }
+
     #${safeElementId} [class~="bg-black"] * {
       color: #ffffff !important;
     }
+
     #${safeElementId} [class~="bg-black/10"] {
       background-color: #e6e6e6 !important;
     }
+
     #${safeElementId} [class~="bg-black/5"] {
       background-color: #f2f2f2 !important;
     }
+
     #${safeElementId} [class~="text-white"] {
       color: #ffffff !important;
     }
-    #${safeElementId} [class~="text-black/60"] {
+
+    #${safeElementId} [class~="texttext-black/60"] {
       color: #666666 !important;
     }
+
     #${safeElementId} [class~="text-black/70"] {
       color: #4d4d4d !important;
     }
+
     #${safeElementId} [class~="text-blue-700"] {
       color: #1d4ed8 !important;
     }
+
     #${safeElementId} [class~="text-red-600"] {
       color: #dc2626 !important;
     }
   `;
+
   clonedDocument.head.appendChild(style);
 }
 
@@ -157,9 +195,16 @@ export async function downloadAsPdf(
   orientation: PdfOrientation = "portrait",
 ) {
   const element = document.getElementById(elementId);
-  if (!element) throw new Error("Não foi possível encontrar o conteúdo do relatório.");
 
-  if (document.fonts?.ready) await document.fonts.ready;
+  if (!element) {
+    throw new Error(
+      "Não foi possível encontrar o conteúdo do relatório.",
+    );
+  }
+
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
 
   const originalDisplay = element.style.display;
   const originalPosition = element.style.position;
@@ -178,7 +223,13 @@ export async function downloadAsPdf(
     );
 
     if (explicitPages.length > 0) {
-      const pdf = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+      const pdf = new jsPDF({
+        orientation,
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const marginX = 4;
@@ -187,11 +238,21 @@ export async function downloadAsPdf(
       const contentWidth = pageWidth - marginX * 2;
       const contentHeight = pageHeight - marginTop - marginBottom;
 
-      for (let pageIndex = 0; pageIndex < explicitPages.length; pageIndex += 1) {
+      for (
+        let pageIndex = 0;
+        pageIndex < explicitPages.length;
+        pageIndex += 1
+      ) {
         const pageElement = explicitPages[pageIndex];
         const pageRect = pageElement.getBoundingClientRect();
-        const captureWidth = Math.ceil(Math.max(pageElement.scrollWidth, pageRect.width));
-        const captureHeight = Math.ceil(Math.max(pageElement.scrollHeight, pageRect.height));
+
+        const captureWidth = Math.ceil(
+          Math.max(pageElement.scrollWidth, pageRect.width),
+        );
+
+        const captureHeight = Math.ceil(
+          Math.max(pageElement.scrollHeight, pageRect.height),
+        );
 
         const pageCanvas = await html2canvas(pageElement, {
           scale: 2,
@@ -202,14 +263,21 @@ export async function downloadAsPdf(
           height: captureHeight,
           windowWidth: captureWidth,
           windowHeight: captureHeight,
+
           onclone: (clonedDocument) => {
             applyPdfSafeColors(clonedDocument, elementId);
-            const clonedElement = clonedDocument.getElementById(elementId);
+
+            const clonedElement =
+              clonedDocument.getElementById(elementId);
+
             if (!clonedElement) return;
 
             clonedElement.style.boxShadow = "none";
+
             clonedElement
-              .querySelectorAll<HTMLElement>(".overflow-x-auto, .overflow-auto")
+              .querySelectorAll<HTMLElement>(
+                ".overflow-x-auto, .overflow-auto",
+              )
               .forEach((node) => {
                 node.style.overflow = "visible";
               });
@@ -217,18 +285,24 @@ export async function downloadAsPdf(
         });
 
         if (!pageCanvas.width || !pageCanvas.height) {
-          throw new Error("Uma das páginas do relatório está vazia.");
+          throw new Error(
+            "Uma das páginas do relatório está vazia.",
+          );
         }
 
         const scale = Math.min(
           contentWidth / pageCanvas.width,
           contentHeight / pageCanvas.height,
         );
+
         const renderedWidth = pageCanvas.width * scale;
         const renderedHeight = pageCanvas.height * scale;
         const x = (pageWidth - renderedWidth) / 2;
 
-        if (pageIndex > 0) pdf.addPage();
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
         pdf.addImage(
           pageCanvas.toDataURL("image/png"),
           "PNG",
@@ -247,8 +321,14 @@ export async function downloadAsPdf(
     }
 
     const rect = element.getBoundingClientRect();
-    const captureWidth = Math.ceil(Math.max(element.scrollWidth, rect.width));
-    const captureHeight = Math.ceil(Math.max(element.scrollHeight, rect.height));
+
+    const captureWidth = Math.ceil(
+      Math.max(element.scrollWidth, rect.width),
+    );
+
+    const captureHeight = Math.ceil(
+      Math.max(element.scrollHeight, rect.height),
+    );
 
     const canvas = await html2canvas(element, {
       scale: 2,
@@ -259,35 +339,60 @@ export async function downloadAsPdf(
       height: captureHeight,
       windowWidth: captureWidth,
       windowHeight: captureHeight,
+
       onclone: (clonedDocument) => {
         applyPdfSafeColors(clonedDocument, elementId);
-        const clonedElement = clonedDocument.getElementById(elementId);
+
+        const clonedElement =
+          clonedDocument.getElementById(elementId);
+
         if (!clonedElement) return;
 
         clonedElement.style.boxShadow = "none";
+
         clonedElement
-          .querySelectorAll<HTMLElement>(".overflow-x-auto, .overflow-auto")
+          .querySelectorAll<HTMLElement>(
+            ".overflow-x-auto, .overflow-auto",
+          )
           .forEach((node) => {
             node.style.overflow = "visible";
           });
       },
     });
 
-    if (!canvas.width || !canvas.height) throw new Error("O relatório está vazio.");
+    if (!canvas.width || !canvas.height) {
+      throw new Error("O relatório está vazio.");
+    }
 
-    const pdf = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+    const pdf = new jsPDF({
+      orientation,
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const marginX = 7;
     const marginTop = 7;
     const marginBottom = 11;
+
     const contentWidth = pageWidth - marginX * 2;
     const contentHeight = pageHeight - marginTop - marginBottom;
-    const heightAtFullWidth = (canvas.height * contentWidth) / canvas.width;
 
-    // Relatórios que já têm proporção de uma folha A4 devem permanecer em uma única página.
+    const heightAtFullWidth =
+      (canvas.height * contentWidth) / canvas.width;
+
+    /*
+     * Relatórios que já possuem proporção de uma página A4
+     * permanecem em uma única página.
+     */
     if (heightAtFullWidth <= contentHeight * 1.06) {
-      const scale = Math.min(contentWidth / canvas.width, contentHeight / canvas.height);
+      const scale = Math.min(
+        contentWidth / canvas.width,
+        contentHeight / canvas.height,
+      );
+
       const renderedWidth = canvas.width * scale;
       const renderedHeight = canvas.height * scale;
       const x = (pageWidth - renderedWidth) / 2;
@@ -304,35 +409,71 @@ export async function downloadAsPdf(
       );
     } else {
       const millimetersPerPixel = contentWidth / canvas.width;
-      const maximumSliceHeight = Math.floor(contentHeight / millimetersPerPixel);
-      const safeBreakPoints = getSafeBreakPoints(element, canvas.height);
+
+      const maximumSliceHeight = Math.floor(
+        contentHeight / millimetersPerPixel,
+      );
+
+      const safeBreakPoints = getSafeBreakPoints(
+        element,
+        canvas.height,
+      );
+
       let sliceStart = 0;
       let pageIndex = 0;
 
       while (sliceStart < canvas.height) {
-        const proposedEnd = Math.min(sliceStart + maximumSliceHeight, canvas.height);
+        const proposedEnd = Math.min(
+          sliceStart + maximumSliceHeight,
+          canvas.height,
+        );
+
         let sliceEnd = proposedEnd;
 
         if (proposedEnd < canvas.height) {
-          const minimumUsefulEnd = sliceStart + maximumSliceHeight * 0.55;
+          const minimumUsefulEnd =
+            sliceStart + maximumSliceHeight * 0.55;
+
           const safeEnd = safeBreakPoints
-            .filter((point) => point >= minimumUsefulEnd && point <= proposedEnd)
+            .filter(
+              (point) =>
+                point >= minimumUsefulEnd &&
+                point <= proposedEnd,
+            )
             .at(-1);
 
-          if (safeEnd && safeEnd > sliceStart) sliceEnd = safeEnd;
+          if (safeEnd && safeEnd > sliceStart) {
+            sliceEnd = safeEnd;
+          }
         }
 
-        if (sliceEnd <= sliceStart) sliceEnd = proposedEnd;
+        if (sliceEnd <= sliceStart) {
+          sliceEnd = proposedEnd;
+        }
 
         const sliceHeight = sliceEnd - sliceStart;
         const pageCanvas = document.createElement("canvas");
+
         pageCanvas.width = canvas.width;
         pageCanvas.height = sliceHeight;
+
         const context = pageCanvas.getContext("2d");
-        if (!context) throw new Error("Não foi possível preparar uma página do PDF.");
+
+        if (!context) {
+          throw new Error(
+            "Não foi possível preparar uma página do PDF.",
+          );
+        }
 
         context.fillStyle = "#ffffff";
-        context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+        context.fillRect(
+          0,
+          0,
+          pageCanvas.width,
+          pageCanvas.height,
+        );
+
         context.drawImage(
           canvas,
           0,
@@ -345,7 +486,10 @@ export async function downloadAsPdf(
           sliceHeight,
         );
 
-        if (pageIndex > 0) pdf.addPage();
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
         pdf.addImage(
           pageCanvas.toDataURL("image/png"),
           "PNG",
