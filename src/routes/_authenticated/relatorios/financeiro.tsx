@@ -484,53 +484,6 @@ function Page() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Receita Total dos ROLs</div>
-          <div className="text-2xl font-bold text-green-700">{brl(data.receitaTotal)}</div>
-        </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Custos Totais</div>
-          <div className="text-2xl font-bold text-red-700">{brl(data.custoTotal)}</div>
-        </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Resultado Final</div>
-          <div className="text-2xl font-bold text-emerald-700">{brl(data.lucroTotal)}</div>
-        </div>
-      </div>
-
-      <div className="rounded-md border bg-card p-4 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm font-semibold">Detalhamento do período</div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            {itensDetalhados.length} itens no período
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[11px] uppercase text-muted-foreground border-b">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Data</th>
-                <th className="text-left px-3 py-2 font-medium">Origem</th>
-                <th className="text-left px-3 py-2 font-medium">Descrição</th>
-                <th className="text-right px-3 py-2 font-medium">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {itensDetalhados.map((item) => (
-                <tr key={item.id} className="border-t">
-                  <td className="px-3 py-2">{item.data}</td>
-                  <td className="px-3 py-2">{item.origem}</td>
-                  <td className="px-3 py-2">{item.descricao}</td>
-                  <td className="px-3 py-2 text-right font-mono">{brl(item.valor)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <div className="rounded-md border bg-card p-4 mb-6">
         <div className="text-sm font-semibold mb-4">Lançamentos de despesas</div>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
@@ -597,6 +550,54 @@ function Page() {
           </table>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Receita Total dos ROLs</div>
+          <div className="text-2xl font-bold text-green-700">{brl(data.receitaTotal)}</div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Custos Totais</div>
+          <div className="text-2xl font-bold text-red-700">{brl(data.custoTotal)}</div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Resultado Final</div>
+          <div className="text-2xl font-bold text-emerald-700">{brl(data.lucroTotal)}</div>
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-card p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm font-semibold">Detalhamento do período</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            {itensDetalhados.length} itens no período
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-[11px] uppercase text-muted-foreground border-b">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Data</th>
+                <th className="text-left px-3 py-2 font-medium">Origem</th>
+                <th className="text-left px-3 py-2 font-medium">Descrição</th>
+                <th className="text-right px-3 py-2 font-medium">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itensDetalhados.map((item) => (
+                <tr key={item.id} className="border-t">
+                  <td className="px-3 py-2">{item.data}</td>
+                  <td className="px-3 py-2">{item.origem}</td>
+                  <td className="px-3 py-2">{item.descricao}</td>
+                  <td className="px-3 py-2 text-right font-mono">{brl(item.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </>
   );
 }
