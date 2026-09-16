@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -39,19 +39,6 @@ function formatDateValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatRevenuePercent(value: number, receita: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
-    return "0,00%";
-  }
-
-  return `${percentFormatter.format((value * 100) / receita)}%`;
 }
 
 function Page() {
@@ -195,6 +182,32 @@ function Page() {
   });
 
   const [novoItem, setNovoItem] = useState<Item>({ peca_id: "", quantidade: 1 });
+  const novaPecaTriggerRef = useRef<HTMLButtonElement>(null);
+  const novaQuantidadeRef = useRef<HTMLInputElement>(null);
+
+  const focusNovaPeca = () => {
+    window.setTimeout(() => novaPecaTriggerRef.current?.focus(), 0);
+  };
+
+  const handleNovaPecaChange = (pecaId: string) => {
+    setNovoItem((prev) => ({ ...prev, peca_id: pecaId }));
+    window.setTimeout(() => {
+      novaQuantidadeRef.current?.focus();
+      novaQuantidadeRef.current?.select();
+    }, 0);
+  };
+
+  const adicionarNovoItemEContinuar = async () => {
+    if (!novoItem.peca_id || novoItem.quantidade <= 0 || upsertItem.isPending) return;
+
+    try {
+      await upsertItem.mutateAsync(novoItem);
+      setNovoItem({ peca_id: "", quantidade: 1 });
+      focusNovaPeca();
+    } catch {
+      // O erro já é exibido pelo onError da mutation.
+    }
+  };
 
   const handleAnoVencimentoChange = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 4);
@@ -369,9 +382,9 @@ function Page() {
                 <td className="px-2 py-1">
                   <Select
                     value={novoItem.peca_id}
-                    onValueChange={(v) => setNovoItem({ ...novoItem, peca_id: v })}
+                    onValueChange={handleNovaPecaChange}
                   >
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger ref={novaPecaTriggerRef} className="h-8">
                       <SelectValue placeholder="Selecione a peça…" />
                     </SelectTrigger>
                     <SelectContent>
@@ -385,6 +398,7 @@ function Page() {
                 </td>
                 <td className="px-2 py-1">
                   <Input
+                    ref={novaQuantidadeRef}
                     className="h-8 text-right font-mono"
                     type="number"
                     min={1}
@@ -393,6 +407,17 @@ function Page() {
                     onChange={(e) =>
                       setNovoItem({ ...novoItem, quantidade: Number(e.target.value) })
                     }
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => {
+                      if (
+                        (e.key === "Tab" && !e.shiftKey) ||
+                        (e.key === "Enter" && !e.shiftKey)
+                      ) {
+                        if (!novoItem.peca_id || novoItem.quantidade <= 0) return;
+                        e.preventDefault();
+                        void adicionarNovoItemEContinuar();
+                      }
+                    }}
                   />
                 </td>
                 <td colSpan={3}></td>
@@ -400,11 +425,13 @@ function Page() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    disabled={!novoItem.peca_id || novoItem.quantidade <= 0}
-                    onClick={() => {
-                      upsertItem.mutate(novoItem);
-                      setNovoItem({ peca_id: "", quantidade: 1 });
-                    }}
+                    disabled={
+                      !novoItem.peca_id ||
+                      novoItem.quantidade <= 0 ||
+                      upsertItem.isPending
+                    }
+                    onClick={() => void adicionarNovoItemEContinuar()}
+                    aria-label="Adicionar item e continuar"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -430,36 +457,15 @@ function Page() {
       <div className="grid grid-cols-3 gap-3 mt-4">
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Receita</div>
-          <div className="mt-1 flex items-baseline justify-between gap-3">
-            <span className="text-xl font-semibold">{brl(header.total_receita)}</span>
-            <span className="font-mono text-sm font-semibold text-muted-foreground">
-              {Number(header.total_receita ?? 0) === 0 ? "0,00%" : "100,00%"}
-            </span>
-          </div>
+          <div className="text-xl font-semibold mt-1">{brl(header.total_receita)}</div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Custo</div>
-          <div className="mt-1 flex items-baseline justify-between gap-3">
-            <span className="text-xl font-semibold">{brl(header.total_custo)}</span>
-            <span className="font-mono text-sm font-semibold text-muted-foreground">
-              {formatRevenuePercent(
-                Number(header.total_custo ?? 0),
-                Number(header.total_receita ?? 0),
-              )}
-            </span>
-          </div>
+          <div className="text-xl font-semibold mt-1">{brl(header.total_custo)}</div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Lucro</div>
-          <div className="mt-1 flex items-baseline justify-between gap-3">
-            <span className="text-xl font-semibold">{brl(header.total_lucro)}</span>
-            <span className="font-mono text-sm font-semibold text-muted-foreground">
-              {formatRevenuePercent(
-                Number(header.total_lucro ?? 0),
-                Number(header.total_receita ?? 0),
-              )}
-            </span>
-          </div>
+          <div className="text-xl font-semibold mt-1">{brl(header.total_lucro)}</div>
         </div>
       </div>
     </>
