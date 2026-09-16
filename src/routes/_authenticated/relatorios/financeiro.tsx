@@ -19,9 +19,11 @@ export const Route = createFileRoute("/_authenticated/relatorios/financeiro")({
 type LancamentoDespesa = {
   id: string;
   data: string;
+  dataVencimento: string;
   fornecedor: string;
   descricao: string;
   tipo: string;
+  pagamento: string;
   valor: number;
 };
 
@@ -75,13 +77,23 @@ function getRollCost(roll: any) {
   return itemTotal > 0 ? itemTotal : toNumber(roll?.total_custo);
 }
 
-const initialForm = {
-  data: firstOfMonth(),
-  fornecedor: "",
-  descricao: "",
-  tipo: "",
-  valor: "",
-};
+function getTodayForInput() {
+  const today = new Date();
+  const localTime = new Date(today.getTime() - today.getTimezoneOffset() * 60_000);
+  return localTime.toISOString().slice(0, 10);
+}
+
+function createInitialForm() {
+  return {
+    data: getTodayForInput(),
+    dataVencimento: "",
+    fornecedor: "",
+    descricao: "",
+    tipo: "",
+    pagamento: "",
+    valor: "",
+  };
+}
 
 function Page() {
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
@@ -90,12 +102,19 @@ function Page() {
     if (typeof window === "undefined") return [];
     try {
       const salvo = window.localStorage.getItem("relatorio-despesas-custos");
-      return salvo ? JSON.parse(salvo) : [];
+      const itensSalvos = salvo ? JSON.parse(salvo) : [];
+      if (!Array.isArray(itensSalvos)) return [];
+
+      return itensSalvos.map((item) => ({
+        ...item,
+        dataVencimento: item.dataVencimento ?? "",
+        pagamento: item.pagamento ?? "",
+      }));
     } catch {
       return [];
     }
   });
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(createInitialForm);
   const [editId, setEditId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -215,7 +234,7 @@ function Page() {
         id: `desp-${item.id}`,
         data: formatDateForDisplay(item.data),
         origem: item.tipo || "Despesa lançada",
-        descricao: `${item.fornecedor} • ${item.descricao}`,
+        descricao: `${item.fornecedor} • ${item.descricao} • Pagamento: ${item.pagamento || "—"} • Vencimento: ${formatDateForDisplay(item.dataVencimento) || "—"}`,
         valor: item.valor,
       })),
     ];
@@ -231,19 +250,29 @@ function Page() {
 
   const resetForm = () => {
     setEditId(null);
-    setForm(initialForm);
+    setForm(createInitialForm());
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!form.data || !form.fornecedor || !form.descricao || !form.tipo || !form.valor) return;
+    if (
+      !form.data ||
+      !form.dataVencimento ||
+      !form.fornecedor ||
+      !form.descricao ||
+      !form.tipo ||
+      !form.pagamento ||
+      !form.valor
+    ) return;
 
     const payload: LancamentoDespesa = {
       id: editId ?? crypto.randomUUID(),
       data: form.data,
+      dataVencimento: form.dataVencimento,
       fornecedor: form.fornecedor,
       descricao: form.descricao,
       tipo: form.tipo,
+      pagamento: form.pagamento,
       valor: Number(form.valor),
     };
 
@@ -260,9 +289,11 @@ function Page() {
     setEditId(item.id);
     setForm({
       data: item.data,
+      dataVencimento: item.dataVencimento ?? "",
       fornecedor: item.fornecedor,
       descricao: item.descricao,
       tipo: item.tipo,
+      pagamento: item.pagamento ?? "",
       valor: String(item.valor),
     });
   };
@@ -304,7 +335,7 @@ function Page() {
         values: [
           formatDateForDisplay(item.data),
           item.tipo || "Despesa lançada",
-          `${item.fornecedor} • ${item.descricao}`,
+          `${item.fornecedor} • ${item.descricao} • Pagamento: ${item.pagamento || "—"} • Vencimento: ${formatDateForDisplay(item.dataVencimento) || "—"}`,
           brl(item.valor),
         ],
       })),
@@ -486,10 +517,14 @@ function Page() {
 
       <div className="rounded-md border bg-card p-4 mb-6">
         <div className="text-sm font-semibold mb-4">Lançamentos de despesas</div>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 mb-4">
           <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data</Label>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data do lançamento</Label>
             <Input type="date" value={form.data} onChange={(e) => setForm((prev) => ({ ...prev, data: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Vencimento</Label>
+            <Input type="date" value={form.dataVencimento} onChange={(e) => setForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} />
           </div>
           <div>
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fornecedor</Label>
@@ -504,10 +539,14 @@ function Page() {
             <Input value={form.tipo} onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))} />
           </div>
           <div>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pagamento</Label>
+            <Input placeholder="PIX, boleto, cartão..." value={form.pagamento} onChange={(e) => setForm((prev) => ({ ...prev, pagamento: e.target.value }))} />
+          </div>
+          <div>
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Valor</Label>
             <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm((prev) => ({ ...prev, valor: e.target.value }))} />
           </div>
-          <div className="md:col-span-2 lg:col-span-6 flex gap-2">
+          <div className="md:col-span-2 lg:col-span-7 flex gap-2">
             <Button type="submit">{editId ? "Salvar alterações" : "Adicionar despesa"}</Button>
             {editId ? <Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button> : null}
           </div>
@@ -522,10 +561,12 @@ function Page() {
           <table className="w-full text-sm">
             <thead className="text-[11px] uppercase text-muted-foreground border-b">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">Data</th>
+                <th className="text-left px-3 py-2 font-medium">Lançamento</th>
+                <th className="text-left px-3 py-2 font-medium">Vencimento</th>
                 <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
                 <th className="text-left px-3 py-2 font-medium">Descrição</th>
                 <th className="text-left px-3 py-2 font-medium">Tipo</th>
+                <th className="text-left px-3 py-2 font-medium">Pagamento</th>
                 <th className="text-right px-3 py-2 font-medium">Valor</th>
                 <th className="text-right px-3 py-2 font-medium">Ações</th>
               </tr>
@@ -533,10 +574,12 @@ function Page() {
             <tbody>
               {despesasFiltradas.map((item) => (
                 <tr key={item.id} className="border-t">
-                  <td className="px-3 py-2">{new Date(item.data).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-3 py-2">{formatDateForDisplay(item.data)}</td>
+                  <td className="px-3 py-2">{formatDateForDisplay(item.dataVencimento) || "—"}</td>
                   <td className="px-3 py-2">{item.fornecedor}</td>
                   <td className="px-3 py-2">{item.descricao}</td>
                   <td className="px-3 py-2">{item.tipo}</td>
+                  <td className="px-3 py-2">{item.pagamento || "—"}</td>
                   <td className="px-3 py-2 text-right font-mono">{brl(item.valor)}</td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-2">
