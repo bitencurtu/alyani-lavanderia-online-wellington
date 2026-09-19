@@ -51,6 +51,19 @@ function formatDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatRevenuePercent(value: number, receita: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
+    return "0,00%";
+  }
+
+  return `${percentFormatter.format((value * 100) / receita)}%`;
+}
+
 function Page() {
   console.log("roll-alyani.$id montado");
   const { id } = Route.useParams();
@@ -459,15 +472,36 @@ function Page() {
       <div className="grid grid-cols-3 gap-3 mt-4">
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Receita</div>
-          <div className="text-xl font-semibold mt-1">{brl(header.total_receita)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(header.total_receita)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {Number(header.total_receita ?? 0) === 0 ? "0,00%" : "100,00%"}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Custo</div>
-          <div className="text-xl font-semibold mt-1">{brl(header.total_custo)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(header.total_custo)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(
+                Number(header.total_custo ?? 0),
+                Number(header.total_receita ?? 0),
+              )}
+            </span>
+          </div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Lucro</div>
-          <div className="text-xl font-semibold mt-1">{brl(header.total_lucro)}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{brl(header.total_lucro)}</span>
+            <span className="font-mono text-sm font-semibold text-muted-foreground">
+              {formatRevenuePercent(
+                Number(header.total_lucro ?? 0),
+                Number(header.total_receita ?? 0),
+              )}
+            </span>
+          </div>
         </div>
       </div>
     </>
