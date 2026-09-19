@@ -1,29 +1,11 @@
-import { useEffect, useState } from "react";
-
 interface AnimatedPageProps {
   children: React.ReactNode;
 }
 
 export function AnimatedPage({ children }: AnimatedPageProps) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, 50);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div
-      className={`transition-all duration-500 ease-out transform ${
-        isVisible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-4"
-      }`}
-    >
-      {children}
-    </div>
-  );
+  // A animação antiga esperava 50 ms e depois fazia um fade/slide de 500 ms.
+  // Isso dava sensação de atraso em Dashboard e Rolls a cada navegação.
+  // Mantemos o wrapper para não precisar alterar as páginas que já o usam,
+  // mas renderizamos o conteúdo imediatamente.
+  return <div>{children}</div>;
 }

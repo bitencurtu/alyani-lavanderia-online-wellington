@@ -5,9 +5,12 @@ import { AppSidebar, MobileTopBar } from "@/components/app/sidebar";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/auth" });
-    return { user: data.user };
+    // getSession lê a sessão persistida localmente e evita um round-trip de
+    // rede em toda troca de rota. A segurança dos dados continua no Supabase
+    // via RLS/token; o refresh do token permanece automático no client.
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.user) throw redirect({ to: "/auth" });
+    return { user: data.session.user };
   },
   component: AuthenticatedLayout,
 });
