@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
 import { toast } from "sonner";
+import { jsPDF } from "jspdf";
 
 export const Route = createFileRoute("/_authenticated/financeiro/pagamentos")({
   head: () => ({ meta: [{ title: "Pagamentos — Alyani" }] }),
@@ -177,6 +178,118 @@ function Page() {
     setSelectedIds(new Set());
   };
 
+  const handleExportPdf = () => {
+    if (rows.length === 0) {
+      toast.error("Nenhum pagamento para exportar com os filtros atuais.");
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = 297;
+    const pageHeight = 210;
+    const marginX = 10;
+    const bottomMargin = 10;
+    const tableWidth = pageWidth - marginX * 2;
+    const headerHeight = 7;
+    const rowHeight = 7;
+    const colWidths = [22, 54, 54, 27, 31, 30, 39];
+    const headers = ["ROLL", "CLIENTE", "PRESTADORA", "DATA ROLL", "VALOR", "STATUS", "PAGAMENTO"];
+
+    const selectedHotel = (hoteis as any[]).find((h) => h.id === filters.hotelId)?.nome ?? "Todos";
+    const selectedPrestadora = (prestadoras as any[]).find((p) => p.id === filters.prestadoraId)?.nome ?? "Todas";
+    const selectedStatus = filters.status ? (statusLabel[filters.status] ?? filters.status) : "Todos";
+
+    const drawPageHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.text("Pagamentos", marginX, 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      const period = `Período do Roll: ${filters.dataInicio ? brDate(filters.dataInicio) : "-"} a ${filters.dataFim ? brDate(filters.dataFim) : "-"}`;
+      doc.text(period, marginX, 18);
+      doc.text(`Cliente: ${selectedHotel}   |   Prestadora: ${selectedPrestadora}   |   Status: ${selectedStatus}`, marginX, 23);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text(`Total: ${brl(totals.total)}`, marginX, 30);
+      doc.text(`Pendente: ${brl(totals.pendente)} (${percentage(totals.pendente).toFixed(2).replace(".", ",")}%)`, 68, 30);
+      doc.text(`Pago: ${brl(totals.pago)} (${percentage(totals.pago).toFixed(2).replace(".", ",")}%)`, 145, 30);
+      doc.text(`Cancelado: ${brl(totals.cancelado)} (${percentage(totals.cancelado).toFixed(2).replace(".", ",")}%)`, 215, 30);
+    };
+
+    const drawTableHeader = (y: number) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      let x = marginX;
+      headers.forEach((header, index) => {
+        doc.rect(x, y, colWidths[index], headerHeight);
+        doc.text(header, x + 1.5, y + 4.6);
+        x += colWidths[index];
+      });
+    };
+
+    const fitText = (value: string, width: number) => {
+      const text = value || "-";
+      doc.setFontSize(6.5);
+      if (doc.getTextWidth(text) <= width - 3) return text;
+      let shortened = text;
+      while (shortened.length > 1 && doc.getTextWidth(`${shortened}…`) > width - 3) shortened = shortened.slice(0, -1);
+      return `${shortened}…`;
+    };
+
+    drawPageHeader();
+    let y = 36;
+    drawTableHeader(y);
+    y += headerHeight;
+
+    doc.setFont("helvetica", "normal");
+    rows.forEach((row: any) => {
+      if (y + rowHeight > pageHeight - bottomMargin) {
+        doc.addPage();
+        drawPageHeader();
+        y = 36;
+        drawTableHeader(y);
+        y += headerHeight;
+        doc.setFont("helvetica", "normal");
+      }
+
+      const values = [
+        String(row.rolls_alyani?.numero ?? "-"),
+        row.rolls_alyani?.hoteis?.nome ?? "-",
+        row.prestadoras?.nome ?? "-",
+        brDate(row.rolls_alyani?.data_roll),
+        brl(row.valor),
+        statusLabel[row.status] ?? row.status ?? "-",
+        row.data_pagamento ? brDate(row.data_pagamento) : "-",
+      ];
+
+      let x = marginX;
+      values.forEach((value, index) => {
+        doc.rect(x, y, colWidths[index], rowHeight);
+        doc.setFontSize(6.5);
+        if (index === 4) {
+          doc.text(fitText(String(value), colWidths[index]), x + colWidths[index] - 1.5, y + 4.6, { align: "right" });
+        } else {
+          doc.text(fitText(String(value), colWidths[index]), x + 1.5, y + 4.6);
+        }
+        x += colWidths[index];
+      });
+      y += rowHeight;
+    });
+
+    const pageCount = doc.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      doc.setPage(page);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(`Página ${page} de ${pageCount}`, pageWidth - marginX, pageHeight - 5, { align: "right" });
+    }
+
+    const statusPart = filters.status ? `-${filters.status}` : "";
+    doc.save(`pagamentos${statusPart}-${filters.dataInicio || "inicio"}-a-${filters.dataFim || "fim"}.pdf`);
+  };
+
   return (
     <>
       <PageHeader title="Pagamentos" description="Valores devidos às prestadoras — gerados automaticamente a partir dos Rolls Alyani." />
@@ -254,6 +367,7 @@ function Page() {
           <span className="text-sm text-muted-foreground mr-auto">
             {selectedIds.size > 0 ? `${selectedIds.size} Roll${selectedIds.size > 1 ? "s" : ""} selecionado${selectedIds.size > 1 ? "s" : ""}` : "Selecione um ou mais Rolls para alterar o status"}
           </span>
+          <Button size="sm" variant="outline" onClick={handleExportPdf}>Baixar PDF</Button>
           <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pendente")}>Marcar pendente</Button>
           <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pago")}>Marcar pago</Button>
           <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("cancelado")}>Marcar cancelado</Button>
