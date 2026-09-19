@@ -262,11 +262,42 @@ input, select {
 }
 
 .card-hover {
-  transition: all 0.3s ease;
+  transition: none;
 }
 
-.card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+.card-hover:hover,
+.card-hover:active {
+  transform: none;
+  box-shadow: none;
 }
 
+
+/* Áreas operacionais sem movimento de hover/tap.
+   Mantém cores de foco/hover dos controles, mas elimina "pulos" e animações
+   que podem ficar presas em telas touch. */
+.no-hover-motion button:hover,
+.no-hover-motion a:hover,
+.no-hover-motion button:active,
+.no-hover-motion a:active {
+  transform: none !important;
+}
+
+.no-hover-motion tr {
+  transition: none !important;
+}
+
+.no-hover-motion tbody tr:hover {
+  background-color: transparent !important;
+}
+
+.no-hover-motion .card-hover,
+.no-hover-motion .transition-smooth {
+  transition: none !important;
+}
+
+.no-hover-motion .card-hover:hover,
+.no-hover-motion .hover-scale:hover,
+.no-hover-motion .hover-scale-lg:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
