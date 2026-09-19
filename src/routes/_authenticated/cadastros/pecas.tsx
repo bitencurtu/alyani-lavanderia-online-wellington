@@ -234,6 +234,7 @@ onError: (e: any) => toast.error(e.message),});
                     size="icon"
                     disabled={deactivate.isPending}
                     onClick={() => {
+                      if (!window.confirm("Tem certeza que deseja excluir esta peça?")) return;
                       setHiddenIds((prev) => {
                         const next = new Set(prev);
                         next.add(h.id);
