@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { invalidateRollPrestadora } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-prestadora/$id")({
   head: () => ({ meta: [{ title: "Roll Prestadora — Alyani" }] }),
@@ -67,7 +66,8 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll atualizado.");
-      void invalidateRollPrestadora(qc);
+      qc.invalidateQueries({ queryKey: ["roll-prestadora", id] });
+      qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -85,7 +85,7 @@ function Page() {
     onSuccess: async () => { 
       await refetchItens(); 
       await refetch(); 
-      await invalidateRollPrestadora(qc);
+      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -95,7 +95,7 @@ function Page() {
     onSuccess: async () => { 
       await refetchItens(); 
       await refetch(); 
-      await invalidateRollPrestadora(qc);
+      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
