@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActiveHoteis, fetchActivePrestadoras, HOTEIS_LITE_QUERY_KEY, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { calculatePaymentTotals, PAGAMENTO_STATUS_CLASS, PAGAMENTO_STATUS_LABEL, percentageOfTotal, todayIsoDate, type PagamentoStatus } from "@/lib/financeiro";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 
@@ -18,31 +20,19 @@ export const Route = createFileRoute("/_authenticated/financeiro/pagamentos")({
   component: Page,
 });
 
-const statusColor: Record<string, string> = {
-  pendente: "text-warning border-warning/30 bg-warning/10",
-  pago: "text-success border-success/30 bg-success/10",
-  cancelado: "text-muted-foreground border-muted-foreground/30 bg-muted/30",
-};
-
-const statusLabel: Record<string, string> = {
-  pendente: "Pendente",
-  pago: "Pago",
-  cancelado: "Cancelado",
-};
-
 function Page() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: prestadoras = [] } = useQuery({
-    queryKey: ["prestadoras-lite"],
-    queryFn: async () => (await supabase.from("prestadoras").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PRESTADORAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePrestadoras,
   });
 
   const { data: hoteis = [] } = useQuery({
-    queryKey: ["hoteis-lite"],
-    queryFn: async () => (await supabase.from("hoteis").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: HOTEIS_LITE_QUERY_KEY,
+    queryFn: fetchActiveHoteis,
   });
 
   const { data = [] } = useQuery({
@@ -83,21 +73,9 @@ function Page() {
     });
   }, [rows]);
 
-  const totals = useMemo(
-    () =>
-      rows.reduce(
-        (a: any, r: any) => ({
-          total: a.total + Number(r.valor),
-          pago: a.pago + (r.status === "pago" ? Number(r.valor) : 0),
-          pendente: a.pendente + (r.status === "pendente" ? Number(r.valor) : 0),
-          cancelado: a.cancelado + (r.status === "cancelado" ? Number(r.valor) : 0),
-        }),
-        { total: 0, pago: 0, pendente: 0, cancelado: 0 },
-      ),
-    [rows],
-  );
+  const totals = useMemo(() => calculatePaymentTotals(rows), [rows]);
 
-  const percentage = (value: number) => (totals.total > 0 ? (value / totals.total) * 100 : 0);
+  const percentage = (value: number) => percentageOfTotal(value, totals.total);
 
   const invalidateFinanceiro = () => {
     qc.invalidateQueries({ queryKey: ["pagamentos"] });
@@ -118,7 +96,7 @@ function Page() {
   });
 
   const patchSelected = useMutation({
-    mutationFn: async (status: "pendente" | "pago" | "cancelado") => {
+    mutationFn: async (status: PagamentoStatus) => {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
 
@@ -139,7 +117,7 @@ function Page() {
           .map((row: any) => row.id);
 
         if (idsSemData.length > 0) {
-          const today = new Date().toISOString().slice(0, 10);
+          const today = todayIsoDate();
           const { error: dateError } = await supabase
             .from("pagamentos")
             .update({ data_pagamento: today })
@@ -152,7 +130,7 @@ function Page() {
     onSuccess: (_, status) => {
       invalidateFinanceiro();
       setSelectedIds(new Set());
-      toast.success(`${statusLabel[status]} aplicado aos Rolls selecionados.`);
+      toast.success(`${PAGAMENTO_STATUS_LABEL[status]} aplicado aos Rolls selecionados.`);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -197,7 +175,7 @@ function Page() {
 
     const selectedHotel = (hoteis as any[]).find((h) => h.id === filters.hotelId)?.nome ?? "Todos";
     const selectedPrestadora = (prestadoras as any[]).find((p) => p.id === filters.prestadoraId)?.nome ?? "Todas";
-    const selectedStatus = filters.status ? (statusLabel[filters.status] ?? filters.status) : "Todos";
+    const selectedStatus = filters.status ? (PAGAMENTO_STATUS_LABEL[filters.status as PagamentoStatus] ?? filters.status) : "Todos";
 
     const drawPageHeader = () => {
       doc.setFont("helvetica", "bold");
@@ -260,7 +238,7 @@ function Page() {
         row.prestadoras?.nome ?? "-",
         brDate(row.rolls_alyani?.data_roll),
         brl(row.valor),
-        statusLabel[row.status] ?? row.status ?? "-",
+        PAGAMENTO_STATUS_LABEL[row.status as PagamentoStatus] ?? row.status ?? "-",
         row.data_pagamento ? brDate(row.data_pagamento) : "-",
       ];
 
@@ -415,8 +393,8 @@ function Page() {
                   <td className="px-4 py-1.5">{brDate(c.rolls_alyani?.data_roll)}</td>
                   <td className="px-4 py-1.5 text-right font-mono">{brl(c.valor)}</td>
                   <td className="px-2 py-1">
-                    <span className={`inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium ${statusColor[c.status] ?? ""}`}>
-                      {statusLabel[c.status] ?? c.status}
+                    <span className={`inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium ${PAGAMENTO_STATUS_CLASS[c.status as PagamentoStatus] ?? ""}`}>
+                      {PAGAMENTO_STATUS_LABEL[c.status as PagamentoStatus] ?? c.status}
                     </span>
                   </td>
                   <td className="px-2 py-1">

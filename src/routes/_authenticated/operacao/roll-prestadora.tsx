@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-route
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePrestadoras, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
@@ -35,8 +36,8 @@ function Page() {
   const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const { data: prestadoras = [] } = useQuery({
-    queryKey: ["prestadoras-lite"],
-    queryFn: async () => (await supabase.from("prestadoras").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PRESTADORAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePrestadoras,
   });
   const { data: pecas = [] } = useQuery({
     queryKey: PECAS_LITE_QUERY_KEY,

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePrestadoras, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -24,8 +25,8 @@ function Page() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const { data: prestadoras = [] } = useQuery({
-    queryKey: ["prestadoras-lite"],
-    queryFn: async () => (await supabase.from("prestadoras").select("*").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PRESTADORAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePrestadoras,
   });
 
   const { data: custos = [] } = useQuery({

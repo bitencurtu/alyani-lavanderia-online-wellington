@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePrestadoras, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -46,8 +47,8 @@ function Page() {
     queryFn: fetchActivePecas,
   });
   const { data: prestadoras = [] } = useQuery({
-    queryKey: ["prestadoras-lite"],
-    queryFn: async () => (await supabase.from("prestadoras").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PRESTADORAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePrestadoras,
   });
 
   const [header, setHeader] = useState<any>(null);

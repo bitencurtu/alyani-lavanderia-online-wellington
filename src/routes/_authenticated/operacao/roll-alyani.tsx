@@ -1,7 +1,8 @@
 import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActiveHoteis, fetchActivePrestadoras, HOTEIS_LITE_QUERY_KEY, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
@@ -59,7 +60,6 @@ function formatRevenuePercent(value: number, receita: number) {
 }
 
 function Page() {
-  const hiddenKey = "hiddenPecasIds";
   const matches = useMatches();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({
@@ -86,35 +86,13 @@ function Page() {
   });
   const [novoItens, setNovoItens] = useState<NovoItem[]>([]);
   const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(hiddenKey);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setHiddenIds(new Set(arr.filter((x) => typeof x === "string")));
-      }
-    } catch {}
-  }, []);
-
   const { data: hoteis = [] } = useQuery({
-    queryKey: ["hoteis-lite"],
-    queryFn: async () =>
-      (await supabase.from("hoteis").select("id,nome").eq("status", "ativo").order("nome")).data ??
-      [],
+    queryKey: HOTEIS_LITE_QUERY_KEY,
+    queryFn: fetchActiveHoteis,
   });
   const { data: prestadoras = [] } = useQuery({
-    queryKey: ["prestadoras-lite"],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("prestadoras")
-          .select("id,nome,is_alyani")
-          .eq("status", "ativo")
-          .order("nome")
-      ).data ?? [],
+    queryKey: PRESTADORAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePrestadoras,
   });
   const { data: pecas = [] } = useQuery({
     queryKey: PECAS_LITE_QUERY_KEY,
@@ -576,9 +554,7 @@ function Page() {
                             <SelectValue placeholder="Selecione…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(pecas as any[])
-                              .filter((p) => !hiddenIds.has(p.id) || p.id === item.peca_id)
-                              .map((p) => (
+                            {(pecas as any[]).map((p) => (
                                 <SelectItem key={p.id} value={p.id}>
                                   {p.nome}
                                 </SelectItem>

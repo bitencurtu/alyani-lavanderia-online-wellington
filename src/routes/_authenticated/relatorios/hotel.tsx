@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActiveHoteis, HOTEIS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -30,9 +31,8 @@ function Page() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const { data: hoteis = [] } = useQuery({
-    queryKey: ["hoteis-lite"],
-    queryFn: async () =>
-      (await supabase.from("hoteis").select("*").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: HOTEIS_LITE_QUERY_KEY,
+    queryFn: fetchActiveHoteis,
   });
 
   const { data: precos = [] } = useQuery({

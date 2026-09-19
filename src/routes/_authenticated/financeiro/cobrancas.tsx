@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActiveHoteis, HOTEIS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { calculateCollectionTotals, COBRANCA_STATUS_CLASS, todayIsoDate, type CobrancaStatus } from "@/lib/financeiro";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/financeiro/cobrancas")({
@@ -16,15 +18,11 @@ export const Route = createFileRoute("/_authenticated/financeiro/cobrancas")({
   component: Page,
 });
 
-const statusColor: Record<string, string> = {
-  pendente: "text-warning", pago: "text-success", atrasado: "text-destructive", cancelado: "text-muted-foreground",
-};
-
 function Page() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
 
-  const { data: hoteis = [] } = useQuery({ queryKey: ["hoteis-lite"], queryFn: async () => (await supabase.from("hoteis").select("id,nome").eq("status", "ativo").order("nome")).data ?? [] });
+  const { data: hoteis = [] } = useQuery({ queryKey: HOTEIS_LITE_QUERY_KEY, queryFn: fetchActiveHoteis });
 
   const { data = [] } = useQuery({
     queryKey: ["cobrancas", filters],
@@ -59,7 +57,7 @@ function Page() {
     return q ? data.filter((c: any) => [c.rolls_alyani?.numero, c.hoteis?.nome].some((v) => (v ?? "").toString().toLowerCase().includes(q))) : data;
   }, [data, filters.q]);
 
-  const totals = useMemo(() => rows.reduce((a: any, r: any) => ({ total: a.total + Number(r.valor), pago: a.pago + (r.status === "pago" ? Number(r.valor) : 0), pendente: a.pendente + (r.status !== "pago" && r.status !== "cancelado" ? Number(r.valor) : 0) }), { total: 0, pago: 0, pendente: 0 }), [rows]);
+  const totals = useMemo(() => calculateCollectionTotals(rows), [rows]);
 
   const patch = useMutation({
     mutationFn: async ({ id, upd }: { id: string; upd: any }) => {
@@ -131,8 +129,8 @@ function Page() {
                 <td className="px-4 py-1.5"><Input type="date" className="h-8" value={c.vencimento ?? ""} onChange={(e) => patch.mutate({ id: c.id, upd: { vencimento: e.target.value || null } })} /></td>
                 <td className="px-4 py-1.5 text-right font-mono">{brl(c.valor)}</td>
                 <td className="px-2 py-1">
-                  <Select value={c.status} onValueChange={(v) => patch.mutate({ id: c.id, upd: { status: v, data_pagamento: v === "pago" && !c.data_pagamento ? new Date().toISOString().slice(0, 10) : c.data_pagamento } })}>
-                    <SelectTrigger className={`h-8 ${statusColor[c.status]}`}><SelectValue /></SelectTrigger>
+                  <Select value={c.status} onValueChange={(v) => patch.mutate({ id: c.id, upd: { status: v, data_pagamento: v === "pago" && !c.data_pagamento ? todayIsoDate() : c.data_pagamento } })}>
+                    <SelectTrigger className={`h-8 ${COBRANCA_STATUS_CLASS[c.status as CobrancaStatus]}`}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pendente">Pendente</SelectItem>
                       <SelectItem value="pago">Pago</SelectItem>
