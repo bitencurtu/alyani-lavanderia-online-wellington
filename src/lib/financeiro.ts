@@ -2,7 +2,7 @@ import {
   fromMoneyCents,
   toMoneyCents,
   type NumericValue,
-} from "@/lib/calculos";
+} from "./calculos.ts";
 
 export type PagamentoStatus = "pendente" | "pago" | "cancelado";
 export type CobrancaStatus = PagamentoStatus | "atrasado";

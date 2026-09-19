@@ -26,10 +26,11 @@ export function toFiniteNumber(value: unknown) {
 export function toMoneyCents(value: unknown) {
   if (value === null || value === undefined || value === "") return 0;
 
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? Math.round(value * 100) : 0;
-  }
+  if (typeof value === "number" && !Number.isFinite(value)) return 0;
 
+  // Converte também números pela representação decimal em string. Isso evita
+  // casos clássicos de ponto flutuante como 1.005 * 100 = 100.499999...,
+  // que faria Math.round devolver 100 em vez de 101 centavos.
   const normalized = String(value).trim().replace(/\s/g, "").replace(",", ".");
   const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
 

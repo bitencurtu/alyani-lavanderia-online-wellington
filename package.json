@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test": "node scripts/run-tests.mjs",
+    "test:critical": "node scripts/run-tests.mjs calculos-financeiros fluxos-criticos migrations-criticas"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
