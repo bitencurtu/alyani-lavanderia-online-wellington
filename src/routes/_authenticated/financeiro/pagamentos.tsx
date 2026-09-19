@@ -129,16 +129,31 @@ function Page() {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
 
-      const selectedRows = rows.filter((row: any) => selectedIds.has(row.id));
-      const today = new Date().toISOString().slice(0, 10);
+      // Atualiza todos os Rolls selecionados de uma vez, em vez de fazer
+      // uma requisição separada para cada linha.
+      const { error: statusError } = await supabase
+        .from("pagamentos")
+        .update({ status })
+        .in("id", ids);
 
-      for (const row of selectedRows) {
-        const upd = {
-          status,
-          data_pagamento: status === "pago" && !row.data_pagamento ? today : row.data_pagamento,
-        };
-        const { error } = await supabase.from("pagamentos").update(upd).eq("id", row.id);
-        if (error) throw error;
+      if (statusError) throw statusError;
+
+      // Ao marcar como pago, mantém datas já preenchidas e define a data
+      // de hoje apenas nos pagamentos que ainda não possuem data.
+      if (status === "pago") {
+        const idsSemData = rows
+          .filter((row: any) => selectedIds.has(row.id) && !row.data_pagamento)
+          .map((row: any) => row.id);
+
+        if (idsSemData.length > 0) {
+          const today = new Date().toISOString().slice(0, 10);
+          const { error: dateError } = await supabase
+            .from("pagamentos")
+            .update({ data_pagamento: today })
+            .in("id", idsSemData);
+
+          if (dateError) throw dateError;
+        }
       }
     },
     onSuccess: (_, status) => {
