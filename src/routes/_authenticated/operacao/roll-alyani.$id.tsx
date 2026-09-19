@@ -488,13 +488,34 @@ function SearchablePecaSelect({
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const internalTriggerRef = useRef<HTMLButtonElement | null>(null);
   const selected = pecas.find((p) => p.id === value);
+
+  const setTriggerRef = (node: HTMLButtonElement | null) => {
+    internalTriggerRef.current = node;
+    if (triggerRef) triggerRef.current = node;
+  };
+
+  const focusNextField = () => {
+    const trigger = internalTriggerRef.current;
+    if (!trigger) return;
+
+    const focusable = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+
+    const currentIndex = focusable.indexOf(trigger);
+    const next = focusable[currentIndex + 1];
+    next?.focus();
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
+          ref={setTriggerRef}
           type="button"
           variant="outline"
           role="combobox"
@@ -512,7 +533,24 @@ function SearchablePecaSelect({
         className="w-[var(--radix-popover-trigger-width)] p-0"
       >
         <Command>
-          <CommandInput placeholder="Digite para localizar a peça…" autoFocus />
+          <CommandInput
+            placeholder="Digite para localizar a peça…"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key !== "Tab" || e.shiftKey) return;
+
+              const commandRoot = e.currentTarget.closest('[cmdk-root]');
+              const highlightedItem = commandRoot?.querySelector<HTMLElement>(
+                '[cmdk-item][aria-selected="true"]',
+              );
+
+              if (!highlightedItem) return;
+
+              e.preventDefault();
+              highlightedItem.click();
+              requestAnimationFrame(focusNextField);
+            }}
+          />
           <CommandList>
             <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
             <CommandGroup>
