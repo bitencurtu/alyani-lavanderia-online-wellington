@@ -608,7 +608,11 @@ function Page() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => setNovoItens(novoItens.filter((_, i) => i !== idx))}
+                          onClick={() => {
+                            if (window.confirm("Tem certeza que deseja remover este item?")) {
+                              setNovoItens(novoItens.filter((_, i) => i !== idx));
+                            }
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

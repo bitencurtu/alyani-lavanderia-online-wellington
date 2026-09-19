@@ -152,7 +152,11 @@ function Page() {
                 it={i}
                 pecas={pecas as any[]}
                 onSave={(itm) => upsertItem.mutate({ ...itm, id: i.id })}
-                onRemove={() => removeItem.mutate(i.id)}
+                onRemove={() => {
+                  if (window.confirm("Tem certeza que deseja excluir este item do Roll?")) {
+                    removeItem.mutate(i.id);
+                  }
+                }}
               />
             ))}
             <tr className="border-t bg-muted/20">
