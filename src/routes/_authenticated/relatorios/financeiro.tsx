@@ -51,6 +51,7 @@ type LancamentoDespesa = {
 };
 
 type ReceitaRow = {
+  rowId: string;
   hotelId: string;
   hotel: string;
   periodoInicial: string;
@@ -290,20 +291,30 @@ function Page() {
   const imposto = Math.max(0, Math.min(100, Number(impostoPercentual) || 0));
 
   const receitaRows = useMemo<ReceitaRow[]>(() => {
+    // A planilha do Wellington trabalha por fechamento: o mesmo hotel pode
+    // aparecer mais de uma vez no período quando há vencimentos diferentes.
+    // Por isso o agrupamento é Cliente + Vencimento, e não apenas Cliente.
     const groups = new Map<
       string,
       {
+        rowId: string;
         hotelId: string;
         hotel: string;
+        vencimentoRaw: string;
         rolls: any[];
       }
     >();
 
     for (const roll of rolls as any[]) {
-      const key = String(roll.hotel_id ?? "sem-hotel");
+      const cobranca = firstRelation<any>(roll.cobrancas);
+      const hotelKey = String(roll.hotel_id ?? "sem-hotel");
+      const vencimentoRaw = cobranca?.vencimento ? String(cobranca.vencimento) : "";
+      const key = `${hotelKey}|${vencimentoRaw || "sem-vencimento"}`;
       const current = groups.get(key) ?? {
-        hotelId: key,
+        rowId: key,
+        hotelId: hotelKey,
         hotel: roll.hoteis?.nome ?? "—",
+        vencimentoRaw,
         rolls: [],
       };
       current.rolls.push(roll);
@@ -410,19 +421,27 @@ function Page() {
         const liquidoPosImpostoEfetivo = subtractMoney(receitaEfetiva, impostoValor);
         const liquidoPosImpostoProvisorio = subtractMoney(receitaProvisoria, impostoValor);
         const recebimento = getRecebimentoStatus(cobrancasDoGrupo);
+        const datasRoll = group.rolls
+          .map((roll) => String(roll.data_roll ?? ""))
+          .filter(Boolean)
+          .sort();
+        const periodoInicial = datasRoll[0] ?? dataInicio;
+        const periodoFinal = datasRoll.at(-1) ?? dataFim;
         const vencimentosOrdenados = [...vencimentos].sort();
-        const vencimento =
-          vencimentosOrdenados.length === 0
+        const vencimento = group.vencimentoRaw
+          ? brDate(group.vencimentoRaw)
+          : vencimentosOrdenados.length === 0
             ? "—"
             : vencimentosOrdenados.length === 1
               ? brDate(vencimentosOrdenados[0])
               : `${brDate(vencimentosOrdenados[0])} +${vencimentosOrdenados.length - 1}`;
 
         return {
+          rowId: group.rowId,
           hotelId: group.hotelId,
           hotel: group.hotel,
-          periodoInicial: dataInicio,
-          periodoFinal: dataFim,
+          periodoInicial,
+          periodoFinal,
           vencimento,
           valorReceber,
           valorTeixeira,
@@ -445,7 +464,11 @@ function Page() {
           custoSemReferencia,
         };
       })
-      .sort((a, b) => a.hotel.localeCompare(b.hotel, "pt-BR"));
+      .sort((a, b) => {
+        const byPeriod = a.periodoInicial.localeCompare(b.periodoInicial);
+        if (byPeriod !== 0) return byPeriod;
+        return a.hotel.localeCompare(b.hotel, "pt-BR");
+      });
   }, [rolls, dataInicio, dataFim, imposto, conferenciasPorRoll, custosPorPrestadoraPeca]);
 
   const receitaTotals = useMemo(() => {
@@ -564,38 +587,74 @@ function Page() {
   };
 
   const exportReceitaPdf = () => {
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
-    const pageWidth = 420;
-    const pageHeight = 297;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a2" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 8;
-    const headerHeight = 11;
+    const summaryLabelHeight = 9;
+    const summaryValueHeight = 8;
+    const headerHeight = 12;
     const rowHeight = 8;
     const headers = [
-      "CLIENTE",
-      "PERÍODO",
-      "VENC.",
-      "A RECEBER",
-      "TEIXEIRA",
-      "APURADO",
-      "DIF.",
-      "REC. PROV.",
-      "REC. EFET.",
-      "% PROV.",
-      "% EFET.",
+      "HOTEL",
+      "PERIODO INICIAL",
+      "PERIODO FINAL",
+      "VENCIMENTO",
+      "VLR A RECEBER",
+      "VALOR A PAGAR (TEIXEIRA)",
+      "VLR APURADO (ALYANI)",
+      "# DIF R$ APURADO",
+      "RECEITA LIQ. PROV",
+      "RECEITA LIQ EFETIVA",
+      "% PROVISÃO",
+      "% EFETIVO",
       "IMPOSTO",
-      "PÓS IMP. EFET.",
-      "% PÓS EFET.",
-      "PÓS IMP. PROV.",
-      "% PÓS PROV.",
+      "LIQ. POS IMPOSTO",
+      "% POS IMP. EFET",
+      "LIQ. POS IMP PROV",
+      "% POS IMP. PROV",
       "PAGO?",
     ];
-    const widths = [42, 31, 25, 28, 28, 28, 25, 28, 28, 22, 22, 26, 30, 24, 30, 24, 31];
+    // Soma 578 mm, exatamente a largura útil de uma folha A2 paisagem com margem de 8 mm.
+    const widths = [44, 28, 28, 28, 34, 40, 38, 34, 34, 34, 26, 26, 30, 34, 28, 34, 28, 30];
+    const summaryLabels = [
+      "VLR A RECEBER",
+      "VALOR A PAGAR",
+      "VLR APURADO",
+      "# DIF R$ APURADO",
+      "RECEITA LIQ. PROV",
+      "RECEITA LIQ.",
+      "% PROVISÃO",
+      "% EFETIVO",
+      "IMPOSTO",
+      "LIQ. POS IMPOSTO",
+      "% POS IMP. EFET",
+      "LIQ. POS IMP PROV",
+      "% POS IMP. PROV",
+      "PAGO?",
+    ];
+    const summaryValues = [
+      brl(receitaTotals.valorReceber),
+      brl(receitaTotals.valorTeixeira),
+      brl(receitaTotals.valorApurado),
+      brl(receitaTotals.diferencaApurada),
+      brl(receitaTotals.receitaProvisoria),
+      brl(receitaTotals.receitaEfetiva),
+      percentLabel(receitaTotals.percentualProvisao),
+      percentLabel(receitaTotals.percentualEfetivo),
+      brl(receitaTotals.imposto),
+      brl(receitaTotals.liquidoPosImpostoEfetivo),
+      percentLabel(receitaTotals.percentualPosImpostoEfetivo),
+      brl(receitaTotals.liquidoPosImpostoProvisorio),
+      percentLabel(receitaTotals.percentualPosImpostoProvisorio),
+      "—",
+    ];
 
     const selectedHotel = (hoteis as any[]).find((h) => h.id === hotelId)?.nome ?? "Todos";
     const selectedPrestadora =
       (prestadoras as any[]).find((p) => p.id === prestadoraId)?.nome ?? "Todas";
 
-    const fitText = (text: string, width: number, fontSize = 6.2) => {
+    const fitText = (text: string, width: number, fontSize = 6.1) => {
       doc.setFontSize(fontSize);
       if (doc.getTextWidth(text) <= width - 2) return text;
       let result = text;
@@ -605,58 +664,109 @@ function Page() {
       return `${result}…`;
     };
 
-    const drawPageHeader = () => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("RELATÓRIO DE RECEITA", margin, 13);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(
-        `Período: ${brDate(dataInicio)} a ${brDate(dataFim)}   |   Cliente: ${selectedHotel}   |   Prestadora: ${selectedPrestadora}   |   Imposto: ${imposto.toLocaleString("pt-BR")}%`,
-        margin,
-        20,
-      );
-      doc.setFont("helvetica", "bold");
-      doc.text(`A receber: ${brl(receitaTotals.valorReceber)}`, margin, 27);
-      doc.text(`Teixeira: ${brl(receitaTotals.valorTeixeira)}`, 75, 27);
-      doc.text(`Apurado Alyani: ${brl(receitaTotals.valorApurado)}`, 140, 27);
-      doc.text(`Receita efetiva: ${brl(receitaTotals.receitaEfetiva)}`, 220, 27);
-      doc.text(`Pós imposto: ${brl(receitaTotals.liquidoPosImpostoEfetivo)}`, 305, 27);
+    const paintHeaderCell = (x: number, y: number, width: number, height: number, index: number) => {
+      if (index <= 10) {
+        doc.setFillColor(255, 242, 0);
+        doc.setTextColor(20, 20, 20);
+      } else if (index <= 16) {
+        doc.setFillColor(17, 24, 39);
+        doc.setTextColor(255, 255, 255);
+      } else {
+        doc.setFillColor(107, 125, 40);
+        doc.setTextColor(255, 255, 255);
+      }
+      doc.rect(x, y, width, height, "FD");
+    };
+
+    const drawSummary = (startY: number) => {
+      let x = margin + widths.slice(0, 4).reduce((acc, value) => acc + value, 0);
+      summaryLabels.forEach((label, offset) => {
+        const index = offset + 4;
+        const width = widths[index];
+        paintHeaderCell(x, startY, width, summaryLabelHeight, index);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.6);
+        const lines = doc.splitTextToSize(label, width - 2);
+        doc.text(lines, x + width / 2, startY + 3.5, { align: "center" });
+        x += width;
+      });
+
+      x = margin + widths.slice(0, 4).reduce((acc, value) => acc + value, 0);
+      summaryValues.forEach((value, offset) => {
+        const index = offset + 4;
+        const width = widths[index];
+        if ([4, 5, 6, 7, 8, 9, 12, 13, 15].includes(index)) {
+          doc.setFillColor(122, 143, 56);
+          doc.setTextColor(255, 255, 255);
+        } else {
+          doc.setFillColor(246, 246, 240);
+          doc.setTextColor(20, 20, 20);
+        }
+        doc.rect(x, startY + summaryLabelHeight, width, summaryValueHeight, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.8);
+        doc.text(fitText(value, width, 5.8), x + width / 2, startY + summaryLabelHeight + 5.2, {
+          align: "center",
+        });
+        x += width;
+      });
+      doc.setTextColor(20, 20, 20);
     };
 
     const drawTableHeader = (y: number) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(5.8);
       let x = margin;
       headers.forEach((header, index) => {
-        doc.rect(x, y, widths[index], headerHeight);
-        const lines = doc.splitTextToSize(header, widths[index] - 2);
-        doc.text(lines, x + widths[index] / 2, y + 4.2, { align: "center" });
-        x += widths[index];
+        const width = widths[index];
+        paintHeaderCell(x, y, width, headerHeight, index);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.7);
+        const lines = doc.splitTextToSize(header, width - 2);
+        doc.text(lines, x + width / 2, y + 4, { align: "center" });
+        x += width;
       });
+      doc.setTextColor(20, 20, 20);
+    };
+
+    const drawPageHeader = () => {
+      doc.setDrawColor(150, 150, 150);
+      doc.setTextColor(20, 20, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text("RELATÓRIO DE RECEITA", pageWidth / 2, 12, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text(
+        `Período: ${brDate(dataInicio)} a ${brDate(dataFim)}   |   Cliente: ${selectedHotel}   |   Prestadora: ${selectedPrestadora}   |   Imposto: ${imposto.toLocaleString("pt-BR")}%`,
+        pageWidth / 2,
+        18,
+        { align: "center" },
+      );
+      drawSummary(22);
     };
 
     drawPageHeader();
-    let y = 34;
+    let y = 22 + summaryLabelHeight + summaryValueHeight + 5;
     drawTableHeader(y);
     y += headerHeight;
 
-    doc.setFont("helvetica", "normal");
     for (const row of receitaRows) {
       if (y + rowHeight > pageHeight - 12) {
         doc.addPage();
         drawPageHeader();
-        y = 34;
+        y = 22 + summaryLabelHeight + summaryValueHeight + 5;
         drawTableHeader(y);
         y += headerHeight;
       }
 
-      const status = row.dataRecebimento
-        ? `${row.statusRecebimento} ${brDate(row.dataRecebimento)}`
-        : row.statusRecebimento;
+      const pagoTexto = row.dataRecebimento
+        ? brDate(row.dataRecebimento)
+        : row.statusRecebimento === "Pago"
+          ? "PAGO"
+          : row.statusRecebimento.toUpperCase();
       const values = [
         row.hotel,
-        `${brDate(row.periodoInicial)}–${brDate(row.periodoFinal)}`,
+        brDate(row.periodoInicial),
+        brDate(row.periodoFinal),
         row.vencimento,
         brl(row.valorReceber),
         brl(row.valorTeixeira),
@@ -671,72 +781,43 @@ function Page() {
         percentLabel(row.percentualPosImpostoEfetivo),
         brl(row.liquidoPosImpostoProvisorio),
         percentLabel(row.percentualPosImpostoProvisorio),
-        status,
+        pagoTexto,
       ];
 
       let x = margin;
       values.forEach((value, index) => {
-        doc.rect(x, y, widths[index], rowHeight);
+        const width = widths[index];
+        doc.setFillColor(255, 255, 255);
+        doc.setTextColor(20, 20, 20);
+        doc.rect(x, y, width, rowHeight, "FD");
+        doc.setFont("helvetica", index === 9 || index === 13 ? "bold" : "normal");
         doc.setFontSize(5.8);
-        const rightAligned = index >= 3 && index <= 15;
+        const rightAligned = index >= 4 && index <= 16 && ![10, 11, 14, 16].includes(index);
+        const centered = [1, 2, 3, 10, 11, 14, 16, 17].includes(index);
         doc.text(
-          fitText(String(value), widths[index], 5.8),
-          rightAligned ? x + widths[index] - 1 : x + 1,
-          y + 5,
-          { align: rightAligned ? "right" : "left" },
+          fitText(String(value), width, 5.8),
+          rightAligned ? x + width - 1 : centered ? x + width / 2 : x + 1,
+          y + 5.1,
+          { align: rightAligned ? "right" : centered ? "center" : "left" },
         );
-        x += widths[index];
+        x += width;
       });
       y += rowHeight;
     }
 
-    if (y + rowHeight > pageHeight - 12) {
-      doc.addPage();
-      drawPageHeader();
-      y = 34;
-      drawTableHeader(y);
-      y += headerHeight;
+    if (receitaRows.length === 0) {
+      doc.rect(margin, y, widths.reduce((acc, value) => acc + value, 0), 12);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Nenhum Roll encontrado no período.", pageWidth / 2, y + 7, { align: "center" });
     }
-
-    const totalValues = [
-      "TOTAL",
-      "",
-      "",
-      brl(receitaTotals.valorReceber),
-      brl(receitaTotals.valorTeixeira),
-      brl(receitaTotals.valorApurado),
-      brl(receitaTotals.diferencaApurada),
-      brl(receitaTotals.receitaProvisoria),
-      brl(receitaTotals.receitaEfetiva),
-      percentLabel(receitaTotals.percentualProvisao),
-      percentLabel(receitaTotals.percentualEfetivo),
-      brl(receitaTotals.imposto),
-      brl(receitaTotals.liquidoPosImpostoEfetivo),
-      percentLabel(receitaTotals.percentualPosImpostoEfetivo),
-      brl(receitaTotals.liquidoPosImpostoProvisorio),
-      percentLabel(receitaTotals.percentualPosImpostoProvisorio),
-      "",
-    ];
-
-    doc.setFont("helvetica", "bold");
-    let x = margin;
-    totalValues.forEach((value, index) => {
-      doc.rect(x, y, widths[index], rowHeight);
-      const rightAligned = index >= 3 && index <= 15;
-      doc.text(
-        fitText(String(value), widths[index], 5.8),
-        rightAligned ? x + widths[index] - 1 : x + 1,
-        y + 5,
-        { align: rightAligned ? "right" : "left" },
-      );
-      x += widths[index];
-    });
 
     const pageCount = doc.getNumberOfPages();
     for (let page = 1; page <= pageCount; page += 1) {
       doc.setPage(page);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
+      doc.setTextColor(80, 80, 80);
       doc.text(`Página ${page} de ${pageCount}`, pageWidth - margin, pageHeight - 5, {
         align: "right",
       });
@@ -946,142 +1027,184 @@ function Page() {
         </TabsList>
 
         <TabsContent value="receita" className="mt-0">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Valor a receber</div>
-              <div className="text-xl font-semibold mt-1">{brl(receitaTotals.valorReceber)}</div>
+          <div className="rounded-md border bg-card overflow-hidden mb-6">
+            <div className="border-b px-4 py-5 text-center">
+              <div className="text-xl font-bold tracking-wide">RELATÓRIO DE RECEITA</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Período filtrado: {brDate(dataInicio)} a {brDate(dataFim)}
+              </div>
             </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Apurado Alyani</div>
-              <div className="text-xl font-semibold mt-1">{brl(receitaTotals.valorApurado)}</div>
-            </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Valor Teixeira / Prestadora</div>
-              <div className="text-xl font-semibold mt-1">{brl(receitaTotals.valorTeixeira)}</div>
-            </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Receita efetiva</div>
-              <div className="text-xl font-semibold mt-1 text-success">{brl(receitaTotals.receitaEfetiva)}</div>
-              <div className="text-xs text-muted-foreground mt-1">{percentLabel(receitaTotals.percentualEfetivo)}</div>
-            </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Líquido pós-imposto</div>
-              <div className="text-xl font-semibold mt-1 text-success">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</div>
-              <div className="text-xs text-muted-foreground mt-1">Imposto: {brl(receitaTotals.imposto)}</div>
-            </div>
-          </div>
 
-          <div className="rounded-md border bg-card mb-4 p-3 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Como o valor da prestadora é calculado:</span>{" "}
-            quando existe uma Conferência, o sistema usa as quantidades do Roll Prestadora × o custo da peça. Sem Conferência, usa o valor de Pagamentos como estimativa. Assim o relatório separa o que a Alyani apurou do que veio da prestadora.
-          </div>
-
-          <div className="rounded-md border bg-card overflow-hidden mb-4">
             <div className="overflow-x-auto">
-              <table className="min-w-[2050px] w-full text-xs">
-                <thead className="text-[10px] uppercase text-muted-foreground bg-muted/40">
-                  <tr>
-                    <th className="sticky left-0 z-10 bg-muted px-3 py-2 text-left font-medium min-w-[190px]">Cliente</th>
-                    <th className="px-3 py-2 text-left font-medium">Período inicial</th>
-                    <th className="px-3 py-2 text-left font-medium">Período final</th>
-                    <th className="px-3 py-2 text-left font-medium">Vencimento</th>
-                    <th className="px-3 py-2 text-right font-medium">Vlr a receber</th>
-                    <th className="px-3 py-2 text-right font-medium">Valor a pagar (Teixeira)</th>
-                    <th className="px-3 py-2 text-right font-medium">Vlr apurado (Alyani)</th>
-                    <th className="px-3 py-2 text-right font-medium">Dif. R$ apurado</th>
-                    <th className="px-3 py-2 text-right font-medium">Receita liq. prov.</th>
-                    <th className="px-3 py-2 text-right font-medium">Receita liq. efetiva</th>
-                    <th className="px-3 py-2 text-right font-medium">% provisão</th>
-                    <th className="px-3 py-2 text-right font-medium">% efetivo</th>
-                    <th className="px-3 py-2 text-right font-medium">Imposto</th>
-                    <th className="px-3 py-2 text-right font-medium">Liq. pós imposto</th>
-                    <th className="px-3 py-2 text-right font-medium">% pós imp. efet.</th>
-                    <th className="px-3 py-2 text-right font-medium">Liq. pós imp. prov.</th>
-                    <th className="px-3 py-2 text-right font-medium">% pós imp. prov.</th>
-                    <th className="px-3 py-2 text-left font-medium">Pago?</th>
-                    <th className="px-3 py-2 text-center font-medium">Base Teixeira</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receitaRows.map((row) => (
-                    <tr key={row.hotelId} className="border-t">
-                      <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium">
-                        <div>{row.hotel}</div>
-                        <div className="text-[10px] font-normal text-muted-foreground">{row.rolls} Roll(s)</div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">{brDate(row.periodoInicial)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{brDate(row.periodoFinal)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{row.vencimento}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorReceber)}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorTeixeira)}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorApurado)}</td>
-                      <td className={`px-3 py-2 text-right font-mono whitespace-nowrap ${row.diferencaApurada !== 0 ? "font-semibold" : "text-muted-foreground"}`}>{brl(row.diferencaApurada)}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.receitaProvisoria)}</td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.receitaEfetiva)}</td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">{percentLabel(row.percentualProvisao)}</td>
-                      <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{percentLabel(row.percentualEfetivo)}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.imposto)}</td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.liquidoPosImpostoEfetivo)}</td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">{percentLabel(row.percentualPosImpostoEfetivo)}</td>
-                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.liquidoPosImpostoProvisorio)}</td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">{percentLabel(row.percentualPosImpostoProvisorio)}</td>
-                      <td className={`px-3 py-2 whitespace-nowrap font-medium ${statusClass(row.statusRecebimento)}`}>
-                        {row.statusRecebimento}
-                        {row.dataRecebimento ? <div className="text-[10px] font-normal">{brDate(row.dataRecebimento)}</div> : null}
-                      </td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        {row.rollsConferidos === row.rolls && row.custoSemReferencia === 0 ? (
-                          <span className="text-success font-medium">Conferido</span>
-                        ) : row.rollsConferidos > 0 ? (
-                          <span className="text-warning font-medium">Parcial</span>
-                        ) : (
-                          <span className="text-muted-foreground">Estimado</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {receitaRows.length === 0 ? (
-                    <tr><td colSpan={19} className="px-4 py-10 text-center text-muted-foreground">Nenhum Roll encontrado no período.</td></tr>
-                  ) : null}
-                </tbody>
-                {receitaRows.length > 0 ? (
-                  <tfoot className="border-t-2 bg-muted/30 font-semibold">
+              <div className="min-w-[2050px] p-3">
+                <table className="w-full border-collapse text-[10px] mb-3">
+                  <tbody>
                     <tr>
-                      <td className="sticky left-0 z-10 bg-muted px-3 py-2">TOTAL</td>
-                      <td colSpan={3}></td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.valorReceber)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.valorTeixeira)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.valorApurado)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.diferencaApurada)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.receitaProvisoria)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.receitaEfetiva)}</td>
-                      <td className="px-3 py-2 text-right">{percentLabel(receitaTotals.percentualProvisao)}</td>
-                      <td className="px-3 py-2 text-right">{percentLabel(receitaTotals.percentualEfetivo)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.imposto)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</td>
-                      <td className="px-3 py-2 text-right">{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(receitaTotals.liquidoPosImpostoProvisorio)}</td>
-                      <td className="px-3 py-2 text-right">{percentLabel(receitaTotals.percentualPosImpostoProvisorio)}</td>
-                      <td colSpan={2}></td>
+                      <td colSpan={4} className="border-0"></td>
+                      {[
+                        "VLR A RECEBER",
+                        "VALOR A PAGAR",
+                        "VLR APURADO",
+                        "# DIF R$ APURADO",
+                        "RECEITA LIQ. PROV",
+                        "RECEITA LIQ.",
+                        "% PROVISÃO",
+                      ].map((label) => (
+                        <td
+                          key={label}
+                          className="border border-border px-2 py-2 text-center font-bold text-black"
+                          style={{ backgroundColor: "#fff200" }}
+                        >
+                          {label}
+                        </td>
+                      ))}
+                      {[
+                        "% EFETIVO",
+                        "IMPOSTO",
+                        "LIQ. POS IMPOSTO",
+                        "% POS IMP. EFET",
+                        "LIQ. POS IMP PROV",
+                        "% POS IMP. PROV",
+                      ].map((label) => (
+                        <td
+                          key={label}
+                          className="border border-border px-2 py-2 text-center font-bold text-white"
+                          style={{ backgroundColor: "#111827" }}
+                        >
+                          {label}
+                        </td>
+                      ))}
+                      <td
+                        className="border border-border px-2 py-2 text-center font-bold text-white"
+                        style={{ backgroundColor: "#6b7d28" }}
+                      >
+                        PAGO?
+                      </td>
                     </tr>
-                  </tfoot>
-                ) : null}
-              </table>
-            </div>
-          </div>
+                    <tr className="font-semibold">
+                      <td colSpan={4} className="border-0"></td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorReceber)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorTeixeira)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorApurado)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.diferencaApurada)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.receitaProvisoria)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.receitaEfetiva)}</td>
+                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualProvisao)}</td>
+                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualEfetivo)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.imposto)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.liquidoPosImpostoEfetivo)}</td>
+                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</td>
+                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.liquidoPosImpostoProvisorio)}</td>
+                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualPosImpostoProvisorio)}</td>
+                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>—</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Líquido efetivo pós-imposto</div>
-              <div className="text-xl font-semibold mt-1">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</div>
+                <table className="w-full border-collapse text-[11px]">
+                  <thead>
+                    <tr>
+                      {[
+                        "HOTEL",
+                        "PERIODO INICIAL",
+                        "PERIODO FINAL",
+                        "VENCIMENTO",
+                        "VLR A RECEBER",
+                        "VALOR A PAGAR (TEIXEIRA)",
+                        "VLR APURADO (ALYANI)",
+                        "# DIF R$ APURADO",
+                        "RECEITA LIQ. PROV",
+                        "RECEITA LIQ EFETIVA",
+                        "% PROVISÃO",
+                      ].map((label, index) => (
+                        <th
+                          key={label}
+                          className={`${index === 0 ? "sticky left-0 z-20 min-w-[180px]" : ""} border border-border px-2 py-2 text-center font-bold text-black whitespace-normal`}
+                          style={{ backgroundColor: "#fff200" }}
+                        >
+                          {label}
+                        </th>
+                      ))}
+                      {[
+                        "% EFETIVO",
+                        "IMPOSTO",
+                        "LIQ. POS IMPOSTO",
+                        "% POS IMP. EFET",
+                        "LIQ. POS IMP PROV",
+                        "% POS IMP. PROV",
+                      ].map((label) => (
+                        <th
+                          key={label}
+                          className="border border-border px-2 py-2 text-center font-bold text-white whitespace-normal"
+                          style={{ backgroundColor: "#111827" }}
+                        >
+                          {label}
+                        </th>
+                      ))}
+                      <th
+                        className="border border-border px-2 py-2 text-center font-bold text-white whitespace-normal"
+                        style={{ backgroundColor: "#6b7d28" }}
+                      >
+                        PAGO?
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receitaRows.map((row) => {
+                      const teixeiraConferido = row.rollsConferidos === row.rolls && row.custoSemReferencia === 0;
+                      const teixeiraParcial = row.rollsConferidos > 0 && !teixeiraConferido;
+                      const pagoTexto = row.dataRecebimento
+                        ? brDate(row.dataRecebimento)
+                        : row.statusRecebimento === "Pago"
+                          ? "PAGO"
+                          : row.statusRecebimento.toUpperCase();
+
+                      return (
+                        <tr key={row.rowId} className="border-t">
+                          <td className="sticky left-0 z-10 border border-border bg-card px-2 py-2 text-center font-medium whitespace-nowrap">
+                            {row.hotel}
+                          </td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{brDate(row.periodoInicial)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{brDate(row.periodoFinal)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{row.vencimento}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorReceber)}</td>
+                          <td
+                            className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap"
+                            title={teixeiraConferido ? "Valor conferido com Roll Prestadora" : teixeiraParcial ? "Parte conferida; restante estimado" : "Valor estimado por Pagamentos/apuração"}
+                          >
+                            {brl(row.valorTeixeira)}
+                          </td>
+                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorApurado)}</td>
+                          <td className={`border border-border px-2 py-2 text-right font-mono whitespace-nowrap ${row.diferencaApurada !== 0 ? "font-semibold" : "text-muted-foreground"}`}>{brl(row.diferencaApurada)}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.receitaProvisoria)}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.receitaEfetiva)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualProvisao)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualEfetivo)}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.imposto)}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.liquidoPosImpostoEfetivo)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualPosImpostoEfetivo)}</td>
+                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.liquidoPosImpostoProvisorio)}</td>
+                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualPosImpostoProvisorio)}</td>
+                          <td className={`border border-border px-2 py-2 text-center font-medium whitespace-nowrap ${statusClass(row.statusRecebimento)}`}>
+                            {pagoTexto}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {receitaRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={18} className="border border-border px-4 py-10 text-center text-muted-foreground">
+                          Nenhum Roll encontrado no período.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Despesas lançadas</div>
-              <div className="text-xl font-semibold mt-1">{brl(totalDespesas)}</div>
-            </div>
-            <div className="rounded-md border bg-card p-4">
-              <div className="text-[11px] uppercase text-muted-foreground">Resultado após despesas</div>
-              <div className={`text-xl font-semibold mt-1 ${resultadoAposDespesas >= 0 ? "text-success" : "text-destructive"}`}>{brl(resultadoAposDespesas)}</div>
+
+            <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
+              Assim como na planilha, cada linha representa um fechamento por cliente e vencimento. O valor da Teixeira usa a conferência quando disponível e estimativa quando ainda não houver conferência completa.
             </div>
           </div>
         </TabsContent>
@@ -1124,7 +1247,7 @@ function Page() {
               </div>
             </form>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
               <div className="rounded-md border p-3">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Custos apurados dos Rolls</div>
                 <div className="text-xl font-semibold">{brl(sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))))}</div>
@@ -1136,6 +1259,10 @@ function Page() {
               <div className="rounded-md border p-3">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Total custos + despesas</div>
                 <div className="text-xl font-semibold">{brl(addMoney(sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))), totalDespesas))}</div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Resultado após despesas</div>
+                <div className={`text-xl font-semibold ${resultadoAposDespesas >= 0 ? "text-success" : "text-destructive"}`}>{brl(resultadoAposDespesas)}</div>
               </div>
             </div>
 
