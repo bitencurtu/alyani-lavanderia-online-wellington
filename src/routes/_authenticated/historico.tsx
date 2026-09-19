@@ -27,6 +27,12 @@ type AuditLog = {
   created_at: string;
 };
 
+type ProfileUser = {
+  id: string;
+  nome: string | null;
+  email: string | null;
+};
+
 type RollRef = {
   tipo: "alyani" | "prestadora";
   id: string;
@@ -312,16 +318,27 @@ function Page() {
   const [selectedDate, setSelectedDate] = useState("");
 
   const query = useQuery({
-    queryKey: ["audit-logs"],
+    queryKey: ["audit-logs-with-users"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1000);
+      const [{ data: logs, error: logsError }, { data: profiles, error: profilesError }] = await Promise.all([
+        (supabase as any)
+          .from("audit_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1000),
+        supabase
+          .from("profiles")
+          .select("id,nome,email")
+          .order("nome", { ascending: true }),
+      ]);
 
-      if (error) throw error;
-      return (data ?? []) as AuditLog[];
+      if (logsError) throw logsError;
+      if (profilesError) throw profilesError;
+
+      return {
+        logs: (logs ?? []) as AuditLog[],
+        profiles: (profiles ?? []) as ProfileUser[],
+      };
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -329,7 +346,8 @@ function Page() {
     refetchInterval: 10_000,
   });
 
-  const allRows = query.data ?? [];
+  const allRows = query.data?.logs ?? [];
+  const profiles = query.data?.profiles ?? [];
 
   const rollNumbers = useMemo(() => {
     const numbers = new Map<string, string>();
@@ -343,11 +361,20 @@ function Page() {
 
   const users = useMemo(() => {
     const map = new Map<string, string>();
+
+    // Mostra todos os usuários cadastrados, mesmo que ainda não tenham
+    // gerado uma ação desde que o Histórico foi ativado.
+    for (const profile of profiles) {
+      map.set(profile.id, profile.nome || profile.email || "Usuário");
+    }
+
+    // Mantém também usuários antigos/deletados que ainda existam nos logs.
     for (const row of allRows) {
       map.set(userKey(row), userName(row));
     }
+
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
-  }, [allRows]);
+  }, [allRows, profiles]);
 
   const rolls = useMemo(() => {
     const map = new Map<string, string>();
@@ -364,7 +391,17 @@ function Page() {
 
   const filteredRows = useMemo(() => {
     return allRows.filter((row) => {
-      if (selectedUser !== "todos" && userKey(row) !== selectedUser) return false;
+      if (selectedUser !== "todos") {
+        const selectedProfile = profiles.find((profile) => profile.id === selectedUser);
+        const matchesById = row.usuario_id === selectedUser;
+        const matchesLegacyEmail = Boolean(
+          selectedProfile?.email &&
+          row.usuario_email &&
+          selectedProfile.email.toLowerCase() === row.usuario_email.toLowerCase(),
+        );
+
+        if (!matchesById && !matchesLegacyEmail && userKey(row) !== selectedUser) return false;
+      }
       if (selectedDate && localDateKey(row.created_at) !== selectedDate) return false;
 
       if (selectedRoll !== "todos") {
@@ -374,7 +411,7 @@ function Page() {
 
       return true;
     });
-  }, [allRows, selectedDate, selectedRoll, selectedUser]);
+  }, [allRows, profiles, selectedDate, selectedRoll, selectedUser]);
 
   const activityGroups = useMemo(() => {
     const groups = new Map<string, ActivityGroup>();
