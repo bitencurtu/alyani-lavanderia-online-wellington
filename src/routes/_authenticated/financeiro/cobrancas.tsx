@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
 import { calculateCollectionTotals, COBRANCA_STATUS_CLASS, todayIsoDate, type CobrancaStatus } from "@/lib/financeiro";
 import { toast } from "sonner";
+import { invalidateFinanceiro } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/financeiro/cobrancas")({
   head: () => ({ meta: [{ title: "Cobranças — Alyani" }] }),
@@ -64,14 +65,7 @@ function Page() {
       const { error } = await supabase.from("cobrancas").update(upd).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cobrancas"] });
-      qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
-      qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
-      qc.invalidateQueries({ queryKey: ["rel-hotel"] });
-      qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
-      qc.invalidateQueries({ queryKey: ["rel-cliente"] });
-    },
+    onSuccess: () => invalidateFinanceiro(qc),
     onError: (e: any) => toast.error(e.message),
   });
 

@@ -28,6 +28,7 @@ import { AnimatedPage } from "@/components/ui/animated-page";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { brl, brDate, firstOfMonth, lastOfMonth, isoDate } from "@/lib/format";
 import { toast } from "sonner";
+import { invalidateRollAlyani } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-alyani")({
   head: () => ({ meta: [{ title: "Roll Alyani — Alyani" }] }),
@@ -181,7 +182,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      void invalidateRollAlyani(qc);
       setOpen(false);
       setNovoItens([]);
     },
@@ -195,7 +196,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll excluído.");
-      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      void invalidateRollAlyani(qc);
     },
     onError: (e: any) => toast.error(e.message),
   });

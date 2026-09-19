@@ -15,6 +15,7 @@ import { AnimatedPage } from "@/components/ui/animated-page";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { brDate, firstOfMonth, lastOfMonth, isoDate } from "@/lib/format";
 import { toast } from "sonner";
+import { invalidateRollPrestadora } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-prestadora")({
   head: () => ({ meta: [{ title: "Roll Prestadora — Alyani" }] }),
@@ -77,7 +78,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+      void invalidateRollPrestadora(qc);
       setOpen(false);
       setNovoItens([]);
     },
@@ -89,7 +90,7 @@ function Page() {
       const { error } = await supabase.from("rolls_prestadora").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Roll excluído."); qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }); },
+    onSuccess: () => { toast.success("Roll excluído."); void invalidateRollPrestadora(qc); },
     onError: (e: any) => toast.error(e.message),
   });
 
