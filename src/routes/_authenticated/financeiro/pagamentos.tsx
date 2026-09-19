@@ -292,7 +292,15 @@ function Page() {
 
   return (
     <>
-      <PageHeader title="Pagamentos" description="Valores devidos às prestadoras — gerados automaticamente a partir dos Rolls Alyani." />
+      <PageHeader
+        title="Pagamentos"
+        description="Valores devidos às prestadoras — gerados automaticamente a partir dos Rolls Alyani."
+        actions={
+          <Button size="sm" variant="outline" className="h-9" onClick={handleExportPdf}>
+            Baixar PDF
+          </Button>
+        }
+      />
       <FilterBar
         value={filters}
         onChange={(p) => setFilters((f) => ({ ...f, ...p }))}
@@ -314,21 +322,22 @@ function Page() {
           </Select>
         </div>
         <div>
-          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Filtrar por status</Label>
-          <div className="flex flex-wrap gap-2 mt-1">
+          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</Label>
+          <div className="flex h-9 overflow-hidden rounded-md border bg-background mt-1">
             {[
               { value: undefined, label: "Todos" },
               { value: "pendente", label: "Pendente" },
               { value: "pago", label: "Pago" },
               { value: "cancelado", label: "Cancelado" },
-            ].map((option) => {
+            ].map((option, index) => {
               const active = filters.status === option.value || (!filters.status && option.value === undefined);
               return (
                 <Button
                   key={option.label}
                   type="button"
                   size="sm"
-                  variant={active ? "default" : "outline"}
+                  variant={active ? "default" : "ghost"}
+                  className={`h-9 rounded-none px-3 ${index > 0 ? "border-l" : ""}`}
                   onClick={() => setFilters((f) => ({ ...f, status: option.value }))}
                 >
                   {option.label}
@@ -367,10 +376,11 @@ function Page() {
           <span className="text-sm text-muted-foreground mr-auto">
             {selectedIds.size > 0 ? `${selectedIds.size} Roll${selectedIds.size > 1 ? "s" : ""} selecionado${selectedIds.size > 1 ? "s" : ""}` : "Selecione um ou mais Rolls para alterar o status"}
           </span>
-          <Button size="sm" variant="outline" onClick={handleExportPdf}>Baixar PDF</Button>
-          <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pendente")}>Marcar pendente</Button>
-          <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pago")}>Marcar pago</Button>
-          <Button size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("cancelado")}>Marcar cancelado</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pendente")}>Marcar pendente</Button>
+            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pago")}>Marcar pago</Button>
+            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("cancelado")}>Marcar cancelado</Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
