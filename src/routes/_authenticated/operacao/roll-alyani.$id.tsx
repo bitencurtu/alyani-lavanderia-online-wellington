@@ -345,10 +345,16 @@ function Page() {
             min={MIN_VENCIMENTO}
             max={MAX_VENCIMENTO}
             value={header.data_vencimento ?? ""}
-            onChange={(e) => {
+            onChange={(e) =>
+              setHeader({ ...header, data_vencimento: e.target.value })
+            }
+            onBlur={(e) => {
               const value = e.target.value;
-              if (isValidVencimento(value)) {
-                setHeader({ ...header, data_vencimento: value });
+              if (value && !isValidVencimento(value)) {
+                toast.error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
+                setHeader((current: any) =>
+                  current ? { ...current, data_vencimento: "" } : current,
+                );
               }
             }}
           />
