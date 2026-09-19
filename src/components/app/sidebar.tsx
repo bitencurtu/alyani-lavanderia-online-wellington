@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   GitCompare,
   Wallet,
-  TrendingUp,
   FileBarChart,
   Settings,
   LogOut,
@@ -57,7 +56,6 @@ const groups: { label: string; items: Item[] }[] = [
     label: "Financeiro",
     items: [
       { to: "/financeiro/pagamentos", label: "Pagamentos", icon: Wallet },
-      { to: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: TrendingUp },
     ],
   },
   {
