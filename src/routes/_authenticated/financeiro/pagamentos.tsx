@@ -32,7 +32,6 @@ const statusLabel: Record<string, string> = {
 function Page() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
-  const [dataPagamento, setDataPagamento] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: prestadoras = [] } = useQuery({
@@ -46,7 +45,7 @@ function Page() {
   });
 
   const { data = [] } = useQuery({
-    queryKey: ["pagamentos", filters, dataPagamento],
+    queryKey: ["pagamentos", filters],
     queryFn: async () => {
       let q = supabase
         .from("pagamentos")
@@ -65,10 +64,6 @@ function Page() {
           const rollDate = p.rolls_alyani.data_roll as string;
           if (filters.dataInicio && rollDate < filters.dataInicio) return false;
           if (filters.dataFim && rollDate > filters.dataFim) return false;
-        }
-
-        if (dataPagamento) {
-          if (!p.data_pagamento || p.data_pagamento !== dataPagamento) return false;
         }
 
         return true;
@@ -179,7 +174,6 @@ function Page() {
 
   const clearFilters = () => {
     setFilters({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
-    setDataPagamento("");
     setSelectedIds(new Set());
   };
 
@@ -207,20 +201,28 @@ function Page() {
           </Select>
         </div>
         <div>
-          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</Label>
-          <Select value={filters.status ?? "__all"} onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "__all" ? undefined : v }))}>
-            <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all">Todos</SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="pago">Pago</SelectItem>
-              <SelectItem value="cancelado">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data de pagamento</Label>
-          <Input type="date" className="h-9 w-[150px]" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Filtrar por status</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {[
+              { value: undefined, label: "Todos" },
+              { value: "pendente", label: "Pendente" },
+              { value: "pago", label: "Pago" },
+              { value: "cancelado", label: "Cancelado" },
+            ].map((option) => {
+              const active = filters.status === option.value || (!filters.status && option.value === undefined);
+              return (
+                <Button
+                  key={option.label}
+                  type="button"
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  onClick={() => setFilters((f) => ({ ...f, status: option.value }))}
+                >
+                  {option.label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
       </FilterBar>
 
