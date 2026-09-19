@@ -39,12 +39,13 @@ type NovoItem = {
   quantidade: number;
 };
 
-function formatDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const MIN_VENCIMENTO = "2000-01-01";
+const MAX_VENCIMENTO = "2100-12-31";
+
+function isValidVencimento(value: string | null | undefined) {
+  return !value || (value >= MIN_VENCIMENTO && value <= MAX_VENCIMENTO);
 }
+
 
 const percentFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
@@ -148,6 +149,9 @@ function Page() {
       if (invalidItem) {
         throw new Error("Todos os itens precisam ter uma peça e quantidade maior que zero.");
       }
+      if (!isValidVencimento(novo.data_vencimento)) {
+        throw new Error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
+      }
 
       const { data: rollId, error } = await supabase.rpc(
         "create_roll_alyani_transaction",
@@ -171,7 +175,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      void qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       setOpen(false);
       setNovoItens([]);
     },
@@ -183,11 +187,24 @@ function Page() {
       const { error } = await supabase.from("rolls_alyani").delete().eq("id", id);
       if (error) throw error;
     },
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["rolls_alyani"] });
+      const previous = qc.getQueriesData<any[]>({ queryKey: ["rolls_alyani"] });
+      qc.setQueriesData<any[]>({ queryKey: ["rolls_alyani"] }, (current) =>
+        current?.filter((roll) => roll.id !== id),
+      );
+      return { previous };
+    },
     onSuccess: () => {
       toast.success("Roll excluído.");
-      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any, _id, context) => {
+      context?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+      toast.error(e.message);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+    },
   });
 
   // Check if any match is the child route (has the id param)
@@ -204,18 +221,7 @@ function Page() {
     });
   };
 
-  const handleAnoVencimentoChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    setNovo((prev) => {
-      if (!digits) {
-        return { ...prev, data_vencimento: "" };
-      }
-      const currentDate = prev.data_vencimento ? new Date(prev.data_vencimento) : new Date();
-      const nextDate = new Date(currentDate);
-      nextDate.setFullYear(Number(digits));
-      return { ...prev, data_vencimento: formatDateValue(nextDate) };
-    });
-  };
+
 
   return (
     <AnimatedPage>
@@ -475,26 +481,18 @@ function Page() {
                 />
               </div>
               <div>
-                <Label>Ano de vencimento</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={
-                    novo.data_vencimento
-                      ? new Date(novo.data_vencimento).getFullYear().toString()
-                      : ""
-                  }
-                  onChange={(e) => handleAnoVencimentoChange(e.target.value)}
-                  placeholder="YYYY"
-                />
-              </div>
-              <div>
                 <Label>Vencimento</Label>
                 <Input
                   type="date"
+                  min={MIN_VENCIMENTO}
+                  max={MAX_VENCIMENTO}
                   value={novo.data_vencimento}
-                  onChange={(e) => setNovo({ ...novo, data_vencimento: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (isValidVencimento(value)) {
+                      setNovo({ ...novo, data_vencimento: value });
+                    }
+                  }}
                 />
               </div>
               <div className="col-span-2 flex items-center gap-6 rounded-md border p-3">

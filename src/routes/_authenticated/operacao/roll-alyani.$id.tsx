@@ -46,12 +46,13 @@ type Item = {
   preco_manual?: boolean;
 };
 
-function formatDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const MIN_VENCIMENTO = "2000-01-01";
+const MAX_VENCIMENTO = "2100-12-31";
+
+function isValidVencimento(value: string | null | undefined) {
+  return !value || (value >= MIN_VENCIMENTO && value <= MAX_VENCIMENTO);
 }
+
 
 function Page() {
   console.log("roll-alyani.$id montado");
@@ -60,7 +61,7 @@ function Page() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: roll, refetch } = useQuery({
+  const { data: roll } = useQuery({
     queryKey: ["roll", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -73,7 +74,7 @@ function Page() {
     },
   });
 
-  const { data: itens = [], refetch: refetchItens } = useQuery({
+  const { data: itens = [] } = useQuery({
     queryKey: ["roll-itens", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -116,6 +117,10 @@ function Page() {
 
   const saveHeader = useMutation({
     mutationFn: async () => {
+      if (!isValidVencimento(header.data_vencimento)) {
+        throw new Error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
+      }
+
       const payload = {
         hotel_id: header.hotel_id,
         numero: header.numero,
@@ -130,11 +135,13 @@ function Page() {
       const { error } = await supabase.from("rolls_alyani").update(payload).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("Roll atualizado. Itens recalculados.", { duration: 1200 });
-      await qc.invalidateQueries({ queryKey: ["roll", id] });
-      await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
-      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["roll", id] }),
+        qc.invalidateQueries({ queryKey: ["roll-itens", id] }),
+        qc.invalidateQueries({ queryKey: ["rolls_alyani"] }),
+      ]);
       invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
@@ -147,27 +154,62 @@ function Page() {
         throw new Error("A quantidade deve ser maior que zero.");
       }
 
+      const previousItem = it.id
+        ? (qc.getQueryData<any[]>(["roll-itens", id]) ?? []).find((item) => item.id === it.id)
+        : undefined;
+
       if (it.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("rolls_alyani_itens")
           .update({
             peca_id: it.peca_id,
             quantidade: it.quantidade,
             preco_manual: it.preco_manual ?? false,
           } as any)
-          .eq("id", it.id);
+          .eq("id", it.id)
+          .select("*, pecas(nome)")
+          .single();
         if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("rolls_alyani_itens")
-          .insert({ roll_id: id, peca_id: it.peca_id, quantidade: it.quantidade } as any);
-        if (error) throw error;
+        return { item: data as any, previousItem };
       }
+
+      const { data, error } = await supabase
+        .from("rolls_alyani_itens")
+        .insert({ roll_id: id, peca_id: it.peca_id, quantidade: it.quantidade } as any)
+        .select("*, pecas(nome)")
+        .single();
+      if (error) throw error;
+      return { item: data as any, previousItem: undefined };
     },
-    onSuccess: async () => {
-      await refetchItens();
-      await refetch();
-      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+    onSuccess: ({ item, previousItem }) => {
+      qc.setQueryData<any[]>(["roll-itens", id], (current = []) => {
+        if (previousItem?.id) {
+          return current.map((existing) => (existing.id === item.id ? item : existing));
+        }
+        return [...current, item];
+      });
+
+      setHeader((prev: any) => {
+        if (!prev) return prev;
+        const oldReceita = Number(previousItem?.valor_total ?? 0);
+        const oldCusto = Number(previousItem?.custo_total ?? 0);
+        const newReceita = Number(item.valor_total ?? 0);
+        const newCusto = Number(item.custo_total ?? 0);
+        const totalReceita = Number(prev.total_receita ?? 0) - oldReceita + newReceita;
+        const totalCusto = Number(prev.total_custo ?? 0) - oldCusto + newCusto;
+        return {
+          ...prev,
+          total_receita: totalReceita,
+          total_custo: totalCusto,
+          total_lucro: totalReceita - totalCusto,
+        };
+      });
+
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["roll", id] }),
+        qc.invalidateQueries({ queryKey: ["roll-itens", id] }),
+        qc.invalidateQueries({ queryKey: ["rolls_alyani"] }),
+      ]);
       invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
@@ -178,13 +220,47 @@ function Page() {
       const { error } = await supabase.from("rolls_alyani_itens").delete().eq("id", iid);
       if (error) throw error;
     },
-    onSuccess: async () => {
-      await refetchItens();
-      await refetch();
-      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+    onMutate: async (iid) => {
+      await qc.cancelQueries({ queryKey: ["roll-itens", id] });
+      const previousItems = qc.getQueryData<any[]>(["roll-itens", id]) ?? [];
+      const previousHeader = header;
+      const removed = previousItems.find((item) => item.id === iid);
+
+      qc.setQueryData<any[]>(["roll-itens", id], (current = []) =>
+        current.filter((item) => item.id !== iid),
+      );
+
+      if (removed) {
+        setHeader((prev: any) => {
+          if (!prev) return prev;
+          const totalReceita = Number(prev.total_receita ?? 0) - Number(removed.valor_total ?? 0);
+          const totalCusto = Number(prev.total_custo ?? 0) - Number(removed.custo_total ?? 0);
+          return {
+            ...prev,
+            total_receita: totalReceita,
+            total_custo: totalCusto,
+            total_lucro: totalReceita - totalCusto,
+          };
+        });
+      }
+
+      return { previousItems, previousHeader };
+    },
+    onError: (e: any, _iid, context) => {
+      if (context) {
+        qc.setQueryData(["roll-itens", id], context.previousItems);
+        setHeader(context.previousHeader);
+      }
+      toast.error(e.message);
+    },
+    onSettled: () => {
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["roll", id] }),
+        qc.invalidateQueries({ queryKey: ["roll-itens", id] }),
+        qc.invalidateQueries({ queryKey: ["rolls_alyani"] }),
+      ]);
       invalidateAllRelatedQueries();
     },
-    onError: (e: any) => toast.error(e.message),
   });
 
   const [novoItem, setNovoItem] = useState<Item>({ peca_id: "", quantidade: 1 });
@@ -215,19 +291,7 @@ function Page() {
     }
   };
 
-  const handleAnoVencimentoChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    setHeader((prev: any) => {
-      if (!prev) return prev;
-      if (!digits) {
-        return { ...prev, data_vencimento: "" };
-      }
-      const currentDate = prev.data_vencimento ? new Date(prev.data_vencimento) : new Date();
-      const nextDate = new Date(currentDate);
-      nextDate.setFullYear(Number(digits));
-      return { ...prev, data_vencimento: formatDateValue(nextDate) };
-    });
-  };
+
 
   const totais = useMemo(() => {
     return {
@@ -275,26 +339,18 @@ function Page() {
           />
         </div>
         <div>
-          <Label>Ano de vencimento</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            maxLength={4}
-            value={
-              header.data_vencimento
-                ? new Date(header.data_vencimento).getFullYear().toString()
-                : ""
-            }
-            onChange={(e) => handleAnoVencimentoChange(e.target.value)}
-            placeholder="YYYY"
-          />
-        </div>
-        <div>
           <Label>Vencimento</Label>
           <Input
             type="date"
+            min={MIN_VENCIMENTO}
+            max={MAX_VENCIMENTO}
             value={header.data_vencimento ?? ""}
-            onChange={(e) => setHeader({ ...header, data_vencimento: e.target.value })}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (isValidVencimento(value)) {
+                setHeader({ ...header, data_vencimento: value });
+              }
+            }}
           />
         </div>
         <div>
