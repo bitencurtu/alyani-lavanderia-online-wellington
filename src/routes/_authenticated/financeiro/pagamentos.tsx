@@ -32,8 +32,7 @@ const statusLabel: Record<string, string> = {
 function Page() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
-  const [dataPagamentoInicio, setDataPagamentoInicio] = useState("");
-  const [dataPagamentoFim, setDataPagamentoFim] = useState("");
+  const [dataPagamento, setDataPagamento] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: prestadoras = [] } = useQuery({
@@ -47,7 +46,7 @@ function Page() {
   });
 
   const { data = [] } = useQuery({
-    queryKey: ["pagamentos", filters, dataPagamentoInicio, dataPagamentoFim],
+    queryKey: ["pagamentos", filters, dataPagamento],
     queryFn: async () => {
       let q = supabase
         .from("pagamentos")
@@ -68,10 +67,8 @@ function Page() {
           if (filters.dataFim && rollDate > filters.dataFim) return false;
         }
 
-        if (dataPagamentoInicio || dataPagamentoFim) {
-          if (!p.data_pagamento) return false;
-          if (dataPagamentoInicio && p.data_pagamento < dataPagamentoInicio) return false;
-          if (dataPagamentoFim && p.data_pagamento > dataPagamentoFim) return false;
+        if (dataPagamento) {
+          if (!p.data_pagamento || p.data_pagamento !== dataPagamento) return false;
         }
 
         return true;
@@ -182,8 +179,7 @@ function Page() {
 
   const clearFilters = () => {
     setFilters({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
-    setDataPagamentoInicio("");
-    setDataPagamentoFim("");
+    setDataPagamento("");
     setSelectedIds(new Set());
   };
 
@@ -223,12 +219,8 @@ function Page() {
           </Select>
         </div>
         <div>
-          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pagamento inicial</Label>
-          <Input type="date" className="h-9 w-[150px]" value={dataPagamentoInicio} onChange={(e) => setDataPagamentoInicio(e.target.value)} />
-        </div>
-        <div>
-          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pagamento final</Label>
-          <Input type="date" className="h-9 w-[150px]" value={dataPagamentoFim} onChange={(e) => setDataPagamentoFim(e.target.value)} />
+          <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data de pagamento</Label>
+          <Input type="date" className="h-9 w-[150px]" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
         </div>
       </FilterBar>
 
