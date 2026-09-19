@@ -299,6 +299,7 @@ function Page() {
   };
 
   const handleDelete = (id: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir esta despesa?")) return;
     setDespesas((prev) => prev.filter((item) => item.id !== id));
     if (editId === id) resetForm();
   };
