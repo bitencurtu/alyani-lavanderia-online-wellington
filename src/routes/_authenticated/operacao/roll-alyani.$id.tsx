@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -14,9 +14,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Check, ChevronsUpDown, Plus, Trash2, Save } from "lucide-react";
 import { brl } from "@/lib/format";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-alyani/$id")({
   head: () => ({ meta: [{ title: "Roll Alyani — Alyani" }] }),
@@ -380,21 +390,13 @@ function Page() {
               ))}
               <tr className="border-t bg-muted/20">
                 <td className="px-2 py-1">
-                  <Select
+                  <SearchablePecaSelect
                     value={novoItem.peca_id}
+                    pecas={pecas as any[]}
                     onValueChange={handleNovaPecaChange}
-                  >
-                    <SelectTrigger ref={novaPecaTriggerRef} className="h-8">
-                      <SelectValue placeholder="Selecione a peça…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(pecas as any[]).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    triggerRef={novaPecaTriggerRef}
+                    placeholder="Selecione a peça…"
+                  />
                 </td>
                 <td className="px-2 py-1">
                   <Input
@@ -472,6 +474,74 @@ function Page() {
   );
 }
 
+function SearchablePecaSelect({
+  value,
+  pecas,
+  onValueChange,
+  triggerRef,
+  placeholder = "Selecione a peça…",
+}: {
+  value: string;
+  pecas: any[];
+  onValueChange: (value: string) => void;
+  triggerRef?: RefObject<HTMLButtonElement | null>;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = pecas.find((p) => p.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          ref={triggerRef}
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-8 w-full justify-between px-3 font-normal"
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            {selected?.nome ?? placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+      >
+        <Command>
+          <CommandInput placeholder="Digite para localizar a peça…" autoFocus />
+          <CommandList>
+            <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
+            <CommandGroup>
+              {pecas.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={p.nome}
+                  onSelect={() => {
+                    onValueChange(p.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === p.id ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {p.nome}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ItemRow({
   it,
   pecas,
@@ -499,18 +569,12 @@ function ItemRow({
   return (
     <tr className="border-t">
       <td className="px-2 py-1">
-        <Select value={local.peca_id} onValueChange={handlePecaChange}>
-          <SelectTrigger className="h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {pecas.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchablePecaSelect
+          value={local.peca_id}
+          pecas={pecas}
+          onValueChange={handlePecaChange}
+          placeholder="Selecione a peça…"
+        />
       </td>
       <td className="px-2 py-1">
         <Input
