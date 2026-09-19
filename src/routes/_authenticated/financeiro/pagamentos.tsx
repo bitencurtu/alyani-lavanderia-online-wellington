@@ -19,6 +19,16 @@ const statusColor: Record<string, string> = {
   pendente: "text-warning", pago: "text-success", cancelado: "text-muted-foreground",
 };
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatPercent(value: number, total: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(total) || total === 0) return "0,00%";
+  return `${percentFormatter.format((value * 100) / total)}%`;
+}
+
 function Page() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
@@ -99,9 +109,27 @@ function Page() {
       </FilterBar>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Total</div><div className="text-xl font-semibold mt-1">{brl(totals.total)}</div></div>
-        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Pendente</div><div className="text-xl font-semibold mt-1 text-warning">{brl(totals.pendente)}</div></div>
-        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Pago</div><div className="text-xl font-semibold mt-1 text-success">{brl(totals.pago)}</div></div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Total</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <div className="text-xl font-semibold">{brl(totals.total)}</div>
+            <div className="font-mono text-sm font-semibold text-muted-foreground">{totals.total === 0 ? "0,00%" : "100,00%"}</div>
+          </div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Pendente</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <div className="text-xl font-semibold text-warning">{brl(totals.pendente)}</div>
+            <div className="font-mono text-sm font-semibold text-muted-foreground">{formatPercent(totals.pendente, totals.total)}</div>
+          </div>
+        </div>
+        <div className="rounded-md border bg-card p-4">
+          <div className="text-[11px] uppercase text-muted-foreground">Pago</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <div className="text-xl font-semibold text-success">{brl(totals.pago)}</div>
+            <div className="font-mono text-sm font-semibold text-muted-foreground">{formatPercent(totals.pago, totals.total)}</div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-md border bg-card overflow-hidden">
