@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
-import { calculatePaymentTotals, PAGAMENTO_STATUS_CLASS, PAGAMENTO_STATUS_LABEL, percentageOfTotal, todayIsoDate, type PagamentoStatus } from "@/lib/financeiro";
+import { calculatePaymentTotals, PAGAMENTO_STATUS_CLASS, PAGAMENTO_STATUS_LABEL, percentageOfTotal, type PagamentoStatus } from "@/lib/financeiro";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 
@@ -100,32 +100,15 @@ function Page() {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
 
-      // Atualiza todos os Rolls selecionados de uma vez, em vez de fazer
-      // uma requisição separada para cada linha.
-      const { error: statusError } = await supabase
-        .from("pagamentos")
-        .update({ status })
-        .in("id", ids);
+      // Status e data de pagamento são alterados dentro da mesma transação
+      // no banco. Assim não existe risco de atualizar o status e falhar antes
+      // de preencher a data de pagamento.
+      const { error } = await supabase.rpc("set_pagamentos_status_transaction", {
+        p_ids: ids,
+        p_status: status,
+      });
 
-      if (statusError) throw statusError;
-
-      // Ao marcar como pago, mantém datas já preenchidas e define a data
-      // de hoje apenas nos pagamentos que ainda não possuem data.
-      if (status === "pago") {
-        const idsSemData = rows
-          .filter((row: any) => selectedIds.has(row.id) && !row.data_pagamento)
-          .map((row: any) => row.id);
-
-        if (idsSemData.length > 0) {
-          const today = todayIsoDate();
-          const { error: dateError } = await supabase
-            .from("pagamentos")
-            .update({ data_pagamento: today })
-            .in("id", idsSemData);
-
-          if (dateError) throw dateError;
-        }
-      }
+      if (error) throw error;
     },
     onSuccess: (_, status) => {
       invalidateFinanceiro();

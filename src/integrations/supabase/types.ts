@@ -657,6 +657,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_roll_alyani_transaction: {
+        Args: {
+          p_data_roll: string
+          p_data_vencimento: string | null
+          p_expresso: boolean
+          p_hotel_id: string
+          p_itens: Json
+          p_nf_fat: string | null
+          p_numero: string
+          p_prestadora_id: string | null
+        }
+        Returns: string
+      }
+      create_roll_prestadora_transaction: {
+        Args: {
+          p_data_roll: string
+          p_itens: Json
+          p_numero: string
+          p_prestadora_id: string
+        }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -665,6 +687,13 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      set_pagamentos_status_transaction: {
+        Args: {
+          p_ids: string[]
+          p_status: Database["public"]["Enums"]["status_pagamento"]
+        }
+        Returns: number
+      }
       tg_roll_recalc: { Args: { _roll_id: string }; Returns: undefined }
     }
     Enums: {

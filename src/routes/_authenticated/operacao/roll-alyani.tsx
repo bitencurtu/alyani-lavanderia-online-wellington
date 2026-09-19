@@ -149,35 +149,25 @@ function Page() {
         throw new Error("Todos os itens precisam ter uma peça e quantidade maior que zero.");
       }
 
-      const payload = {
-        hotel_id: novo.hotel_id,
-        prestadora_id: novo.prestadora_id || null,
-        numero: novo.numero,
-        data_roll: novo.data_roll,
-        data_vencimento: novo.data_vencimento || null,
-        expresso: novo.expresso,
-        nf_fat: novo.nf_fat || null,
-      };
-      const { data: rollData, error: rollError } = await supabase
-        .from("rolls_alyani")
-        .insert(payload as any)
-        .select("id")
-        .single();
-      if (rollError) throw rollError;
+      const { data: rollId, error } = await supabase.rpc(
+        "create_roll_alyani_transaction",
+        {
+          p_hotel_id: novo.hotel_id,
+          p_prestadora_id: novo.prestadora_id || null,
+          p_numero: novo.numero,
+          p_data_roll: novo.data_roll,
+          p_data_vencimento: novo.data_vencimento || null,
+          p_expresso: novo.expresso,
+          p_nf_fat: novo.nf_fat || null,
+          p_itens: novoItens.map((item) => ({
+            peca_id: item.peca_id,
+            quantidade: item.quantidade,
+          })),
+        },
+      );
+      if (error) throw error;
 
-      if (novoItens.length > 0) {
-        const itemsPayload = novoItens.map((item) => ({
-          roll_id: rollData.id,
-          peca_id: item.peca_id,
-          quantidade: item.quantidade,
-        }));
-        const { error: itemsError } = await supabase
-          .from("rolls_alyani_itens")
-          .insert(itemsPayload as any);
-        if (itemsError) throw itemsError;
-      }
-
-      return rollData.id as string;
+      return rollId;
     },
     onSuccess: () => {
       toast.success("Roll criado.");

@@ -60,20 +60,28 @@ function Page() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { data: rollData, error: rollError } = await supabase.from("rolls_prestadora").insert(novo as any).select("id").single();
-      if (rollError) throw rollError;
-
-      if (novoItens.length > 0) {
-        const itemsPayload = novoItens.map(item => ({
-          roll_id: rollData.id,
-          peca_id: item.peca_id,
-          quantidade: item.quantidade,
-        }));
-        const { error: itemsError } = await supabase.from("rolls_prestadora_itens").insert(itemsPayload as any);
-        if (itemsError) throw itemsError;
+      const invalidItem = novoItens.find(
+        (item) => !item.peca_id || !Number.isFinite(item.quantidade) || item.quantidade <= 0,
+      );
+      if (invalidItem) {
+        throw new Error("Todos os itens precisam ter uma peça e quantidade maior que zero.");
       }
 
-      return rollData.id as string;
+      const { data: rollId, error } = await supabase.rpc(
+        "create_roll_prestadora_transaction",
+        {
+          p_prestadora_id: novo.prestadora_id,
+          p_numero: novo.numero,
+          p_data_roll: novo.data_roll,
+          p_itens: novoItens.map((item) => ({
+            peca_id: item.peca_id,
+            quantidade: item.quantidade,
+          })),
+        },
+      );
+      if (error) throw error;
+
+      return rollId;
     },
     onSuccess: () => {
       toast.success("Roll criado.");
