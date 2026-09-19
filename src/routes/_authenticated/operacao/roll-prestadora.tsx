@@ -2,7 +2,6 @@ import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-route
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchActivePrestadoras, PRESTADORAS_LITE_QUERY_KEY } from "@/lib/catalogos";
 import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
@@ -15,7 +14,6 @@ import { AnimatedPage } from "@/components/ui/animated-page";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { brDate, firstOfMonth, lastOfMonth, isoDate } from "@/lib/format";
 import { toast } from "sonner";
-import { invalidateRollPrestadora } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-prestadora")({
   head: () => ({ meta: [{ title: "Roll Prestadora — Alyani" }] }),
@@ -37,8 +35,8 @@ function Page() {
   const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const { data: prestadoras = [] } = useQuery({
-    queryKey: PRESTADORAS_LITE_QUERY_KEY,
-    queryFn: fetchActivePrestadoras,
+    queryKey: ["prestadoras-lite"],
+    queryFn: async () => (await supabase.from("prestadoras").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
   });
   const { data: pecas = [] } = useQuery({
     queryKey: PECAS_LITE_QUERY_KEY,
@@ -78,7 +76,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      void invalidateRollPrestadora(qc);
+      qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
       setOpen(false);
       setNovoItens([]);
     },
@@ -90,7 +88,7 @@ function Page() {
       const { error } = await supabase.from("rolls_prestadora").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Roll excluído."); void invalidateRollPrestadora(qc); },
+    onSuccess: () => { toast.success("Roll excluído."); qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }); },
     onError: (e: any) => toast.error(e.message),
   });
 
