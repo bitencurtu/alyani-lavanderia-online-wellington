@@ -28,7 +28,6 @@ import { AnimatedPage } from "@/components/ui/animated-page";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { brl, brDate, firstOfMonth, lastOfMonth, isoDate } from "@/lib/format";
 import { toast } from "sonner";
-import { invalidateRollAlyani } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-alyani")({
   head: () => ({ meta: [{ title: "Roll Alyani — Alyani" }] }),
@@ -182,7 +181,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      void invalidateRollAlyani(qc);
+      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
       setOpen(false);
       setNovoItens([]);
     },
@@ -196,7 +195,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll excluído.");
-      void invalidateRollAlyani(qc);
+      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -333,7 +332,7 @@ function Page() {
         </div>
       </div>
 
-      <div className="rounded-md border bg-card overflow-hidden">
+      <div className="rounded-md border bg-card overflow-hidden card-hover">
         <div className="max-h-[calc(100vh-420px)] overflow-auto">
           <table className="w-full text-sm">
             <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">

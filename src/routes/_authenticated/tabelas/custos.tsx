@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { brlNumber, isoDate } from "@/lib/format";
 import { Save, Search } from "lucide-react";
 import { toast } from "sonner";
-import { invalidateCustos } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/tabelas/custos")({
   head: () => ({ meta: [{ title: "Tabela de Custos — Alyani" }] }),
@@ -100,7 +99,10 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Custos salvos e rolls atualizados!");
-      void invalidateCustos(qc);
+      qc.invalidateQueries({ queryKey: ["tabela-custos"] });
+      qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      qc.invalidateQueries({ queryKey: ["roll"] });
+      qc.invalidateQueries({ queryKey: ["roll-itens"] });
     },
     onError: (err: any) => toast.error(err.message),
   });

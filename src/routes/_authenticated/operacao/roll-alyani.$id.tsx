@@ -19,7 +19,6 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Check, ChevronsUpDown, Plus, Trash2, Save } from "lucide-react";
 import { brl } from "@/lib/format";
 import { toast } from "sonner";
-import { invalidateRollAlyani } from "@/lib/query-cache";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -105,7 +104,15 @@ function Page() {
     if (roll) setHeader(roll);
   }, [roll]);
 
-
+  const invalidateAllRelatedQueries = () => {
+    qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
+    qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+    qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+    qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
+    qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+    qc.invalidateQueries({ queryKey: ["cobrancas"] });
+    qc.invalidateQueries({ queryKey: ["pagamentos"] });
+  };
 
   const saveHeader = useMutation({
     mutationFn: async () => {
@@ -125,7 +132,10 @@ function Page() {
     },
     onSuccess: async () => {
       toast.success("Roll atualizado. Itens recalculados.", { duration: 1200 });
-      await invalidateRollAlyani(qc);
+      await qc.invalidateQueries({ queryKey: ["roll", id] });
+      await qc.invalidateQueries({ queryKey: ["roll-itens", id] });
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -157,7 +167,8 @@ function Page() {
     onSuccess: async () => {
       await refetchItens();
       await refetch();
-      await invalidateRollAlyani(qc);
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -170,7 +181,8 @@ function Page() {
     onSuccess: async () => {
       await refetchItens();
       await refetch();
-      await invalidateRollAlyani(qc);
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      invalidateAllRelatedQueries();
     },
     onError: (e: any) => toast.error(e.message),
   });

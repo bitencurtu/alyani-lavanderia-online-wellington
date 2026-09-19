@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { invalidateDashboard } from "@/lib/query-cache";
 import { Save } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/operacao/conferencia")({
@@ -62,7 +61,7 @@ function Page() {
       } as any, { onConflict: "roll_alyani_id,roll_prestadora_id" });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Conferência salva."); void invalidateDashboard(qc); },
+    onSuccess: () => { toast.success("Conferência salva."); qc.invalidateQueries({ queryKey: ["dashboard"] }); },
     onError: (e: any) => toast.error(e.message),
   });
 

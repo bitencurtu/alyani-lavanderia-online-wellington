@@ -14,7 +14,6 @@ import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
 import { calculatePaymentTotals, PAGAMENTO_STATUS_CLASS, PAGAMENTO_STATUS_LABEL, percentageOfTotal, todayIsoDate, type PagamentoStatus } from "@/lib/financeiro";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
-import { invalidateFinanceiro } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/financeiro/pagamentos")({
   head: () => ({ meta: [{ title: "Pagamentos — Alyani" }] }),
@@ -78,12 +77,21 @@ function Page() {
 
   const percentage = (value: number) => percentageOfTotal(value, totals.total);
 
+  const invalidateFinanceiro = () => {
+    qc.invalidateQueries({ queryKey: ["pagamentos"] });
+    qc.invalidateQueries({ queryKey: ["rolls-fluxo"] });
+    qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+    qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+    qc.invalidateQueries({ queryKey: ["rel-prestadora"] });
+    qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+  };
+
   const patch = useMutation({
     mutationFn: async ({ id, upd }: { id: string; upd: any }) => {
       const { error } = await supabase.from("pagamentos").update(upd).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => invalidateFinanceiro(qc),
+    onSuccess: invalidateFinanceiro,
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -120,7 +128,7 @@ function Page() {
       }
     },
     onSuccess: (_, status) => {
-      void invalidateFinanceiro(qc);
+      invalidateFinanceiro();
       setSelectedIds(new Set());
       toast.success(`${PAGAMENTO_STATUS_LABEL[status]} aplicado aos Rolls selecionados.`);
     },

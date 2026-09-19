@@ -33,7 +33,6 @@ import {
 } from "@/lib/preco-expresso";
 import { Save, Search } from "lucide-react";
 import { toast } from "sonner";
-import { invalidatePrecos } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/tabelas/precos")({
   head: () => ({ meta: [{ title: "Tabela de Preços — Alyani" }] }),
@@ -220,7 +219,10 @@ function Page() {
       return { changed, changedWithRolls };
     },
     onSuccess: async ({ changed, changedWithRolls }) => {
-      await invalidatePrecos(qc);
+      await qc.invalidateQueries({ queryKey: ["precos", hotelId] });
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      await qc.invalidateQueries({ queryKey: ["roll"] });
+      await qc.invalidateQueries({ queryKey: ["roll-itens"] });
 
       if (changedWithRolls.length > 0) {
         setPriceUpdateQueue(changedWithRolls);
@@ -368,7 +370,14 @@ function Page() {
     },
     onSuccess: async () => {
       toast.success(`${selectedRollIds.size} roll(s) atualizado(s).`);
-      await invalidatePrecos(qc);
+      await qc.invalidateQueries({ queryKey: ["rolls_alyani"] });
+      await qc.invalidateQueries({ queryKey: ["roll"] });
+      await qc.invalidateQueries({ queryKey: ["roll-itens"] });
+      await qc.invalidateQueries({ queryKey: ["rel-financeiro"] });
+      await qc.invalidateQueries({ queryKey: ["rel-hotel"] });
+      await qc.invalidateQueries({ queryKey: ["rel-cliente"] });
+      await qc.invalidateQueries({ queryKey: ["cobrancas"] });
+      await qc.invalidateQueries({ queryKey: ["rolls-para-alterar-preco"] });
       advancePriceUpdate();
     },
     onError: (error: any) => toast.error(error.message),

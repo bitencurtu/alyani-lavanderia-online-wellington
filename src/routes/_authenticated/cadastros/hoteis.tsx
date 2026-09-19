@@ -13,7 +13,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { invalidateHoteis } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/cadastros/hoteis")({
   head: () => ({ meta: [{ title: "Hotéis — Alyani" }] }),
@@ -61,7 +60,7 @@ function HoteisPage() {
     },
     onSuccess: () => {
       toast.success("Hotel salvo.");
-      void invalidateHoteis(qc);
+      qc.invalidateQueries({ queryKey: ["hoteis"] });
       setOpen(false); setEditing(null);
     },
     onError: (e: any) => toast.error(e.message),

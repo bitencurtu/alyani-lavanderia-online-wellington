@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { invalidatePecas } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/cadastros/pecas")({
   head: () => ({ meta: [{ title: "Peças — Alyani" }] }),
@@ -47,7 +46,14 @@ function Page() {
     });
   }, [data, filters.q, viewMode]);
 
-
+  const invalidatePieceData = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pecas"] }),
+      qc.invalidateQueries({ queryKey: ["pecas-lite"] }),
+      qc.invalidateQueries({ queryKey: ["precos"] }),
+      qc.invalidateQueries({ queryKey: ["custos"] }),
+    ]);
+  };
 
   const save = useMutation({
     mutationFn: async (form: PecaForm) => {
@@ -110,7 +116,7 @@ function Page() {
       return { reactivated: false };
     },
     onSuccess: async (result) => {
-      await invalidatePecas(qc);
+      await invalidatePieceData();
       toast.success(result.reactivated ? "Peça reativada. Os preços históricos foram preservados." : "Peça salva.");
       setOpen(false);
       setEditing(null);
@@ -132,7 +138,7 @@ function Page() {
       }
     },
     onSuccess: async (_, vars) => {
-      await invalidatePecas(qc);
+      await invalidatePieceData();
       toast.success(vars.status === "inativo" ? "Peça removida das novas seleções." : "Peça reativada.");
       setOpen(false);
       setEditing(null);

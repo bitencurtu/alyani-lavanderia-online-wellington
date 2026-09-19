@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { invalidatePrestadoras } from "@/lib/query-cache";
 
 export const Route = createFileRoute("/_authenticated/cadastros/prestadoras")({
   head: () => ({ meta: [{ title: "Prestadoras — Alyani" }] }),
@@ -55,7 +54,7 @@ function Page() {
         if (error) throw error;
       }
     },
-    onSuccess: () => { toast.success("Prestadora salva."); void invalidatePrestadoras(qc); setOpen(false); },
+    onSuccess: () => { toast.success("Prestadora salva."); qc.invalidateQueries({ queryKey: ["prestadoras"] }); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
 
