@@ -122,7 +122,7 @@ function Page() {
         </div>
       </FilterBar>
 
-      <div className="rounded-md border bg-card overflow-hidden card-hover">
+      <div className="rounded-md border bg-card overflow-hidden">
         <div className="max-h-[calc(100vh-280px)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
