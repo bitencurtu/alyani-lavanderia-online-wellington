@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -90,15 +91,8 @@ function Page() {
   });
 
   const { data: pecasData } = useQuery({
-    queryKey: ["pecas-lite"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pecas")
-        .select("id,nome")
-        .eq("status", "ativo")
-        .order("nome");
-      return data ?? [];
-    },
+    queryKey: PECAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePecas,
   });
 
   const { data: precosData } = useQuery({
