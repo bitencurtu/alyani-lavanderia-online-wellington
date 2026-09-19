@@ -2,7 +2,7 @@ import {
   fromMoneyCents,
   toMoneyCents,
   type NumericValue,
-} from "./calculos.ts";
+} from "@/lib/calculos";
 
 export type PagamentoStatus = "pendente" | "pago" | "cancelado";
 export type CobrancaStatus = PagamentoStatus | "atrasado";
@@ -19,11 +19,18 @@ export const PAGAMENTO_STATUS_CLASS: Record<PagamentoStatus, string> = {
   cancelado: "text-muted-foreground border-muted-foreground/30 bg-muted/30",
 };
 
+export const COBRANCA_STATUS_LABEL: Record<CobrancaStatus, string> = {
+  pendente: "Pendente",
+  pago: "Pago",
+  atrasado: "Atrasado",
+  cancelado: "Cancelado",
+};
+
 export const COBRANCA_STATUS_CLASS: Record<CobrancaStatus, string> = {
-  pendente: "text-warning",
-  pago: "text-success",
-  atrasado: "text-destructive",
-  cancelado: "text-muted-foreground",
+  pendente: "text-warning border-warning/30 bg-warning/10",
+  pago: "text-success border-success/30 bg-success/10",
+  atrasado: "text-destructive border-destructive/30 bg-destructive/10",
+  cancelado: "text-muted-foreground border-muted-foreground/30 bg-muted/30",
 };
 
 export type FinanceRow = {
@@ -85,8 +92,9 @@ export function calculateCollectionTotals(rows: FinanceRow[]) {
     total: fromMoneyCents(totalAtivoCents),
     totalGeral: fromMoneyCents(totalGeralCents),
     pago: fromMoneyCents(pagoCents),
-    pendente: fromMoneyCents(aReceberCents),
+    pendente: fromMoneyCents(pendenteCents),
     atrasado: fromMoneyCents(atrasadoCents),
+    aReceber: fromMoneyCents(aReceberCents),
     cancelado: fromMoneyCents(canceladoCents),
   };
 }
