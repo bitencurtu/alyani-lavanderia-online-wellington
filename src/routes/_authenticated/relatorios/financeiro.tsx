@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { brl, firstOfMonth, lastOfMonth } from "@/lib/format";
 import { Download } from "lucide-react";
+import { addMoney, getRollCost, getRollRevenue, subtractMoney, sumMoneyValues } from "@/lib/calculos";
 
 export const Route = createFileRoute("/_authenticated/relatorios/financeiro")({
   head: () => ({ meta: [{ title: "Relatório Financeiro — Alyani" }] }),
@@ -44,37 +45,6 @@ function parseDateOnly(value: string | null | undefined) {
 function formatDateForDisplay(value: string | null | undefined) {
   const date = parseDateOnly(value);
   return date ? date.toLocaleDateString("pt-BR") : "";
-}
-
-function toNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function getRollRevenue(roll: any) {
-  const items = (roll?.rolls_alyani_itens ?? []) as any[];
-  const itemTotal = items.reduce((sum, item) => {
-    const quantidade = toNumber(item?.quantidade);
-    const valorUnit = toNumber(item?.valor_unit);
-    const valorTotal = toNumber(item?.valor_total);
-    const calculatedValue = valorTotal > 0 ? valorTotal : quantidade * valorUnit;
-    return sum + calculatedValue;
-  }, 0);
-
-  return itemTotal > 0 ? itemTotal : toNumber(roll?.total_receita);
-}
-
-function getRollCost(roll: any) {
-  const items = (roll?.rolls_alyani_itens ?? []) as any[];
-  const itemTotal = items.reduce((sum, item) => {
-    const quantidade = toNumber(item?.quantidade);
-    const custoUnit = toNumber(item?.custo_unit);
-    const custoTotal = toNumber(item?.custo_total);
-    const calculatedValue = custoTotal > 0 ? custoTotal : quantidade * custoUnit;
-    return sum + calculatedValue;
-  }, 0);
-
-  return itemTotal > 0 ? itemTotal : toNumber(roll?.total_custo);
 }
 
 function getTodayForInput() {
@@ -153,7 +123,7 @@ function Page() {
   }, [rolls, dataInicio, dataFim]);
 
   const totalDespesas = useMemo(() => {
-    return despesasFiltradas.reduce((acc, item) => acc + Number(item.valor ?? 0), 0);
+    return sumMoneyValues(despesasFiltradas.map((item) => item.valor));
   }, [despesasFiltradas]);
 
   const data = useMemo(() => {
@@ -167,8 +137,8 @@ function Page() {
       const receita = getRollRevenue(roll);
       const custo = getRollCost(roll);
 
-      receitaTotal += receita;
-      custoTotal += custo;
+      receitaTotal = addMoney(receitaTotal, receita);
+      custoTotal = addMoney(custoTotal, custo);
 
       for (const item of roll.rolls_alyani_itens ?? []) {
         qtdPecas += Number(item.quantidade ?? 0);
@@ -184,8 +154,8 @@ function Page() {
         });
       }
       const hTotal = porHotel.get(hotelId)!;
-      hTotal.receita += receita;
-      hTotal.custo += custo;
+      hTotal.receita = addMoney(hTotal.receita, receita);
+      hTotal.custo = addMoney(hTotal.custo, custo);
       hTotal.qtdRolls += 1;
 
       const prestId = roll.prestadora_id;
@@ -198,17 +168,17 @@ function Page() {
         });
       }
       const pTotal = porPrestadora.get(prestId)!;
-      pTotal.receita += receita;
-      pTotal.custo += custo;
+      pTotal.receita = addMoney(pTotal.receita, receita);
+      pTotal.custo = addMoney(pTotal.custo, custo);
       pTotal.qtdRolls += 1;
     }
 
-    const lucroTotal = receitaTotal - custoTotal - totalDespesas;
+    const lucroTotal = subtractMoney(receitaTotal, custoTotal, totalDespesas);
     const qtdRolls = periodRolls.length;
 
     return {
       receitaTotal,
-      custoTotal: custoTotal + totalDespesas,
+      custoTotal: addMoney(custoTotal, totalDespesas),
       lucroTotal,
       qtdPecas,
       qtdRolls,
@@ -421,7 +391,10 @@ function Page() {
       30,
     );
 
-    const totalCosts = periodRolls.reduce((acc, roll) => acc + getRollCost(roll), 0) + totalDespesas;
+    const totalCosts = addMoney(
+      sumMoneyValues(periodRolls.map((roll) => getRollCost(roll))),
+      totalDespesas,
+    );
 
     doc.setFillColor(pdfPrimaryColor[0], pdfPrimaryColor[1], pdfPrimaryColor[2]);
     doc.setTextColor(255, 255, 255);

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { calculateQuantityTotal } from "@/lib/calculos";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-prestadora/$id")({
   head: () => ({ meta: [{ title: "Roll Prestadora — Alyani" }] }),
@@ -28,7 +29,7 @@ function Page() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: roll, refetch } = useQuery({
+  const { data: roll } = useQuery({
     queryKey: ["roll-prestadora", id],
     queryFn: async () => {
       const { data, error } = await supabase.from("rolls_prestadora").select("*, prestadoras(nome)").eq("id", id).single();
@@ -37,7 +38,7 @@ function Page() {
     },
   });
 
-  const { data: itens = [], refetch: refetchItens } = useQuery({
+  const { data: itens = [] } = useQuery({
     queryKey: ["roll-prestadora-itens", id],
     queryFn: async () => (await supabase.from("rolls_prestadora_itens").select("*, pecas(nome)").eq("roll_id", id).order("created_at")).data ?? [],
   });
@@ -66,52 +67,90 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll atualizado.");
-      qc.invalidateQueries({ queryKey: ["roll-prestadora", id] });
-      qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+      void qc.invalidateQueries({ queryKey: ["roll-prestadora", id] });
+      void qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
   const upsertItem = useMutation({
     mutationFn: async (it: Item) => {
-      if (it.id) {
-        const { error } = await supabase.from("rolls_prestadora_itens").update({ peca_id: it.peca_id, quantidade: it.quantidade }).eq("id", it.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("rolls_prestadora_itens").insert({ roll_id: id, peca_id: it.peca_id, quantidade: it.quantidade } as any);
-        if (error) throw error;
+      if (!it.peca_id) throw new Error("Selecione uma peça.");
+      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) {
+        throw new Error("A quantidade deve ser maior que zero.");
       }
+
+      if (it.id) {
+        const { data, error } = await supabase
+          .from("rolls_prestadora_itens")
+          .update({ peca_id: it.peca_id, quantidade: it.quantidade })
+          .eq("id", it.id)
+          .select("*, pecas(nome)")
+          .single();
+        if (error) throw error;
+        return { item: data as any, isNew: false };
+      }
+
+      const { data, error } = await supabase
+        .from("rolls_prestadora_itens")
+        .insert({ roll_id: id, peca_id: it.peca_id, quantidade: it.quantidade } as any)
+        .select("*, pecas(nome)")
+        .single();
+      if (error) throw error;
+      return { item: data as any, isNew: true };
     },
-    onSuccess: async () => { 
-      await refetchItens(); 
-      await refetch(); 
-      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+    onSuccess: ({ item, isNew }) => {
+      qc.setQueryData<any[]>(["roll-prestadora-itens", id], (current = []) =>
+        isNew
+          ? [...current, item]
+          : current.map((existing) => (existing.id === item.id ? item : existing)),
+      );
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["roll-prestadora", id] }),
+        qc.invalidateQueries({ queryKey: ["roll-prestadora-itens", id] }),
+        qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }),
+      ]);
     },
     onError: (e: any) => toast.error(e.message),
   });
 
   const removeItem = useMutation({
-    mutationFn: async (iid: string) => { const { error } = await supabase.from("rolls_prestadora_itens").delete().eq("id", iid); if (error) throw error; },
-    onSuccess: async () => { 
-      await refetchItens(); 
-      await refetch(); 
-      await qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+    mutationFn: async (iid: string) => {
+      const { error } = await supabase.from("rolls_prestadora_itens").delete().eq("id", iid);
+      if (error) throw error;
     },
-    onError: (e: any) => toast.error(e.message),
+    onMutate: async (iid) => {
+      await qc.cancelQueries({ queryKey: ["roll-prestadora-itens", id] });
+      const previousItems = qc.getQueryData<any[]>(["roll-prestadora-itens", id]) ?? [];
+      qc.setQueryData<any[]>(["roll-prestadora-itens", id], (current = []) =>
+        current.filter((item) => item.id !== iid),
+      );
+      return { previousItems };
+    },
+    onError: (e: any, _iid, context) => {
+      if (context) qc.setQueryData(["roll-prestadora-itens", id], context.previousItems);
+      toast.error(e.message);
+    },
+    onSettled: () => {
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["roll-prestadora", id] }),
+        qc.invalidateQueries({ queryKey: ["roll-prestadora-itens", id] }),
+        qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }),
+      ]);
+    },
   });
 
   const [novoItem, setNovoItem] = useState<Item>({ peca_id: "", quantidade: 1 });
 
-  const totals = useMemo(() => {
-    return {
-      qtd: itens.reduce((s: number, x: any) => s + Number(x.quantidade ?? 0), 0),
-    };
-  }, [itens]);
+  const totals = useMemo(
+    () => ({ qtd: calculateQuantityTotal(itens as any[]) }),
+    [itens],
+  );
 
   if (!header) return null;
 
   return (
-    <>
+    <div className="no-hover-motion">
       <PageHeader
         title={`Roll #${header.numero}`}
         description={header.prestadoras?.nome ?? ""}
@@ -181,7 +220,7 @@ function Page() {
           </tfoot>
         </table>
       </div>
-    </>
+    </div>
   );
 }
 

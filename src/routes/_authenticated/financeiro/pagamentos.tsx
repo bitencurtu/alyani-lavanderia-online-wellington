@@ -75,7 +75,8 @@ function Page() {
 
   const totals = useMemo(() => calculatePaymentTotals(rows), [rows]);
 
-  const percentage = (value: number) => percentageOfTotal(value, totals.total);
+  const activePercentage = (value: number) => percentageOfTotal(value, totals.total);
+  const canceledPercentage = (value: number) => percentageOfTotal(value, totals.totalGeral);
 
   const invalidateFinanceiro = () => {
     qc.invalidateQueries({ queryKey: ["pagamentos"] });
@@ -173,10 +174,10 @@ function Page() {
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
-      doc.text(`Total: ${brl(totals.total)}`, marginX, 30);
-      doc.text(`Pendente: ${brl(totals.pendente)} (${percentage(totals.pendente).toFixed(2).replace(".", ",")}%)`, 68, 30);
-      doc.text(`Pago: ${brl(totals.pago)} (${percentage(totals.pago).toFixed(2).replace(".", ",")}%)`, 145, 30);
-      doc.text(`Cancelado: ${brl(totals.cancelado)} (${percentage(totals.cancelado).toFixed(2).replace(".", ",")}%)`, 215, 30);
+      doc.text(`Total ativo: ${brl(totals.total)}`, marginX, 30);
+      doc.text(`Pendente: ${brl(totals.pendente)} (${activePercentage(totals.pendente).toFixed(2).replace(".", ",")}%)`, 68, 30);
+      doc.text(`Pago: ${brl(totals.pago)} (${activePercentage(totals.pago).toFixed(2).replace(".", ",")}%)`, 145, 30);
+      doc.text(`Cancelado: ${brl(totals.cancelado)} (${canceledPercentage(totals.cancelado).toFixed(2).replace(".", ",")}%)`, 215, 30);
     };
 
     const drawTableHeader = (y: number) => {
@@ -311,24 +312,24 @@ function Page() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Total</div>
+          <div className="text-[11px] uppercase text-muted-foreground">Total ativo</div>
           <div className="text-xl font-semibold mt-1">{brl(totals.total)}</div>
           <div className="text-xs text-muted-foreground mt-1">{totals.total > 0 ? "100,00%" : "0,00%"}</div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Pendente</div>
           <div className="text-xl font-semibold mt-1 text-warning">{brl(totals.pendente)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{percentage(totals.pendente).toFixed(2).replace(".", ",")}%</div>
+          <div className="text-xs text-muted-foreground mt-1">{activePercentage(totals.pendente).toFixed(2).replace(".", ",")}%</div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Pago</div>
           <div className="text-xl font-semibold mt-1 text-success">{brl(totals.pago)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{percentage(totals.pago).toFixed(2).replace(".", ",")}%</div>
+          <div className="text-xs text-muted-foreground mt-1">{activePercentage(totals.pago).toFixed(2).replace(".", ",")}%</div>
         </div>
         <div className="rounded-md border bg-card p-4">
           <div className="text-[11px] uppercase text-muted-foreground">Cancelado</div>
           <div className="text-xl font-semibold mt-1 text-muted-foreground">{brl(totals.cancelado)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{percentage(totals.cancelado).toFixed(2).replace(".", ",")}%</div>
+          <div className="text-xs text-muted-foreground mt-1">{canceledPercentage(totals.cancelado).toFixed(2).replace(".", ",")}%</div>
         </div>
       </div>
 

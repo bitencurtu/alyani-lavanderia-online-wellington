@@ -101,10 +101,11 @@ function Page() {
         </div>
       </FilterBar>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Total</div><div className="text-xl font-semibold mt-1">{brl(totals.total)}</div></div>
-        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Pendente</div><div className="text-xl font-semibold mt-1 text-warning">{brl(totals.pendente)}</div></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Total ativo</div><div className="text-xl font-semibold mt-1">{brl(totals.total)}</div></div>
+        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">A receber</div><div className="text-xl font-semibold mt-1 text-warning">{brl(totals.pendente)}</div></div>
         <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Pago</div><div className="text-xl font-semibold mt-1 text-success">{brl(totals.pago)}</div></div>
+        <div className="rounded-md border bg-card p-4"><div className="text-[11px] uppercase text-muted-foreground">Cancelado</div><div className="text-xl font-semibold mt-1 text-muted-foreground">{brl(totals.cancelado)}</div></div>
       </div>
 
       <div className="rounded-md border bg-card overflow-hidden">

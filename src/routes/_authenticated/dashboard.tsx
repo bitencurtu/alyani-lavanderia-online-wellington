@@ -7,6 +7,7 @@ import { FilterBar, type FilterState } from "@/components/app/filter-bar";
 import { Button } from "@/components/ui/button";
 import { AnimatedPage } from "@/components/ui/animated-page";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { calculateRollFinancialTotals, formatRevenuePercent } from "@/lib/calculos";
 import {
   ClipboardList,
   Receipt,
@@ -20,19 +21,6 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Alyani Lavanderia" }] }),
   component: Dashboard,
 });
-
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatRevenuePercent(value: number, receita: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
-    return "0,00%";
-  }
-
-  return `${percentFormatter.format((value * 100) / receita)}%`;
-}
 
 function Card({
   label,
@@ -48,7 +36,7 @@ function Card({
   percentage?: string;
 }) {
   return (
-    <div className="rounded-md border bg-card p-4 transition-smooth hover-scale hover:shadow-md">
+    <div className="rounded-md border bg-card p-4">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
           {label}
@@ -105,18 +93,13 @@ function Dashboard() {
     },
   });
 
-  const totals = useMemo(() => {
-    const r = data?.rolls ?? [];
-    return {
-      qtd: r.length,
-      receita: r.reduce((s, x: any) => s + Number(x.total_receita ?? 0), 0),
-      custo: r.reduce((s, x: any) => s + Number(x.total_custo ?? 0), 0),
-      lucro: r.reduce((s, x: any) => s + Number(x.total_lucro ?? 0), 0),
-    };
-  }, [data]);
+  const totals = useMemo(
+    () => calculateRollFinancialTotals((data?.rolls ?? []) as any[]),
+    [data],
+  );
 
   return (
-    <AnimatedPage>
+    <AnimatedPage className="no-hover-motion">
       <PageHeader
         title="Dashboard"
         description="Visão geral do período selecionado."
@@ -151,7 +134,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
-        <div className="rounded-md border bg-card card-hover">
+        <div className="rounded-md border bg-card">
           <div className="px-4 py-3 border-b flex items-center gap-2">
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Últimas movimentações</span>
@@ -189,7 +172,7 @@ function Dashboard() {
           </table>
         </div>
 
-        <div className="rounded-md border bg-card card-hover">
+        <div className="rounded-md border bg-card">
           <div className="px-4 py-3 border-b flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-warning" />
             <span className="text-sm font-medium">Últimas divergências</span>

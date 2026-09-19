@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { brl, brlNumber, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
 import { Download } from "lucide-react";
 import { downloadAsPdf } from "@/lib/pdf-utils";
+import { addMoney, multiplyMoney, roundMoney, sumMoneyValues } from "@/lib/calculos";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/relatorios/prestadora")({
@@ -78,7 +79,10 @@ function Page() {
         const pecaId = i.pecas?.id;
         const custoUnitTabela = pecaId ? Number(custosPorPeca.get(pecaId) ?? 0) : 0;
         const custoUnit = custoUnitSalvo > 0 ? custoUnitSalvo : custoUnitTabela;
-        totalCusto += custoTotalSalvo > 0 ? custoTotalSalvo : custoUnit * quantidade;
+        totalCusto = addMoney(
+          totalCusto,
+          custoTotalSalvo > 0 ? roundMoney(custoTotalSalvo) : multiplyMoney(quantidade, custoUnit),
+        );
       }
       return { ...r, totalCustoCalculado: totalCusto };
     });
@@ -110,13 +114,16 @@ function Page() {
         const custoTotal = Number(i.custo_total ?? 0);
         const custoUnit = Number(i.custo_unit ?? 0);
         cur.qtd += quantidade;
-        cur.valor += custoTotal > 0 ? custoTotal : quantidade * custoUnit;
+        cur.valor = addMoney(
+          cur.valor,
+          custoTotal > 0 ? roundMoney(custoTotal) : multiplyMoney(quantidade, custoUnit),
+        );
         map.set(nome, cur);
       }
     }
     const linhas = [...map.values()].sort((a, b) => a.nome.localeCompare(b.nome));
     const totalQtd = linhas.reduce((s, l) => s + l.qtd, 0);
-    const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
+    const totalValor = sumMoneyValues(linhas.map((l) => l.valor));
     return { linhas, totalQtd, totalValor };
   }, [rolls]);
 

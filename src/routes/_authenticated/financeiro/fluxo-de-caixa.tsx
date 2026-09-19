@@ -14,24 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { brl, firstOfMonth, lastOfMonth } from "@/lib/format";
+import { formatRevenuePercent } from "@/lib/calculos";
+import { calculateCashFlowTotals } from "@/lib/financeiro";
 
 export const Route = createFileRoute("/_authenticated/financeiro/fluxo-de-caixa")({
   head: () => ({ meta: [{ title: "Fluxo de Caixa - Alyani" }] }),
   component: Page,
 });
-
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatRevenuePercent(value: number, receita: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
-    return "0,00%";
-  }
-
-  return `${percentFormatter.format((value * 100) / receita)}%`;
-}
 
 function Page() {
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
@@ -65,45 +54,10 @@ function Page() {
     },
   });
 
-  const totals = useMemo(() => {
-    let recebido = 0;
-    let aReceber = 0;
-    let pago = 0;
-    let aPagar = 0;
-
-    for (const roll of rolls as any[]) {
-      const receita = Number(roll.total_receita ?? 0);
-      const custo = Number(roll.total_custo ?? 0);
-      const cob = roll.cobrancas;
-      const pag = roll.pagamentos;
-
-      if (cob?.status === "pago") {
-        recebido += receita;
-      } else {
-        aReceber += receita;
-      }
-
-      if (pag?.status === "pago") {
-        pago += custo;
-      } else {
-        aPagar += custo;
-      }
-    }
-
-    const lucroRealizado = recebido - pago;
-    const lucroPrevisto = recebido + aReceber - pago - aPagar;
-    const receitaTotal = recebido + aReceber;
-
-    return {
-      recebido,
-      aReceber,
-      pago,
-      aPagar,
-      lucroRealizado,
-      lucroPrevisto,
-      receitaTotal,
-    };
-  }, [rolls]);
+  const totals = useMemo(
+    () => calculateCashFlowTotals(rolls as any[]),
+    [rolls],
+  );
 
   return (
     <>

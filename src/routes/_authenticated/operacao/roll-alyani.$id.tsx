@@ -29,6 +29,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { applyRollItemTotalsDelta, calculateRollItemTotals, removeRollItemTotals } from "@/lib/calculos";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-alyani/$id")({
   head: () => ({ meta: [{ title: "Roll Alyani — Alyani" }] }),
@@ -189,21 +190,9 @@ function Page() {
         return [...current, item];
       });
 
-      setHeader((prev: any) => {
-        if (!prev) return prev;
-        const oldReceita = Number(previousItem?.valor_total ?? 0);
-        const oldCusto = Number(previousItem?.custo_total ?? 0);
-        const newReceita = Number(item.valor_total ?? 0);
-        const newCusto = Number(item.custo_total ?? 0);
-        const totalReceita = Number(prev.total_receita ?? 0) - oldReceita + newReceita;
-        const totalCusto = Number(prev.total_custo ?? 0) - oldCusto + newCusto;
-        return {
-          ...prev,
-          total_receita: totalReceita,
-          total_custo: totalCusto,
-          total_lucro: totalReceita - totalCusto,
-        };
-      });
+      setHeader((prev: any) =>
+        prev ? applyRollItemTotalsDelta(prev, previousItem, item) : prev,
+      );
 
       void Promise.all([
         qc.invalidateQueries({ queryKey: ["roll", id] }),
@@ -231,17 +220,7 @@ function Page() {
       );
 
       if (removed) {
-        setHeader((prev: any) => {
-          if (!prev) return prev;
-          const totalReceita = Number(prev.total_receita ?? 0) - Number(removed.valor_total ?? 0);
-          const totalCusto = Number(prev.total_custo ?? 0) - Number(removed.custo_total ?? 0);
-          return {
-            ...prev,
-            total_receita: totalReceita,
-            total_custo: totalCusto,
-            total_lucro: totalReceita - totalCusto,
-          };
-        });
+        setHeader((prev: any) => (prev ? removeRollItemTotals(prev, removed) : prev));
       }
 
       return { previousItems, previousHeader };
@@ -293,18 +272,15 @@ function Page() {
 
 
 
-  const totais = useMemo(() => {
-    return {
-      qtd: itens.reduce((s: number, i: any) => s + Number(i.quantidade ?? 0), 0),
-      receita: itens.reduce((s: number, i: any) => s + Number(i.valor_total ?? 0), 0),
-      custo: itens.reduce((s: number, i: any) => s + Number(i.custo_total ?? 0), 0),
-    };
-  }, [itens]);
+  const totais = useMemo(
+    () => calculateRollItemTotals(itens as any[]),
+    [itens],
+  );
 
   if (!header) return null;
 
   return (
-    <>
+    <div className="no-hover-motion">
       <PageHeader
         title={`Roll #${header.numero}`}
         description={`${header.hoteis?.nome ?? ""}${header.prestadoras?.nome ? " • " + header.prestadoras.nome : ""}`}
@@ -345,16 +321,10 @@ function Page() {
             min={MIN_VENCIMENTO}
             max={MAX_VENCIMENTO}
             value={header.data_vencimento ?? ""}
-            onChange={(e) =>
-              setHeader({ ...header, data_vencimento: e.target.value })
-            }
-            onBlur={(e) => {
+            onChange={(e) => {
               const value = e.target.value;
-              if (value && !isValidVencimento(value)) {
-                toast.error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
-                setHeader((current: any) =>
-                  current ? { ...current, data_vencimento: "" } : current,
-                );
+              if (isValidVencimento(value)) {
+                setHeader({ ...header, data_vencimento: value });
               }
             }}
           />
@@ -528,7 +498,7 @@ function Page() {
           <div className="text-xl font-semibold mt-1">{brl(header.total_lucro)}</div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

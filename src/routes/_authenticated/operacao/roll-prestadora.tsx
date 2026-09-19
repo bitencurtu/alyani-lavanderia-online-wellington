@@ -85,7 +85,7 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Roll criado.");
-      qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+      void qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
       setOpen(false);
       setNovoItens([]);
     },
@@ -97,8 +97,24 @@ function Page() {
       const { error } = await supabase.from("rolls_prestadora").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Roll excluído."); qc.invalidateQueries({ queryKey: ["rolls_prestadora"] }); },
-    onError: (e: any) => toast.error(e.message),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["rolls_prestadora"] });
+      const previous = qc.getQueriesData<any[]>({ queryKey: ["rolls_prestadora"] });
+      qc.setQueriesData<any[]>({ queryKey: ["rolls_prestadora"] }, (current) =>
+        current?.filter((roll) => roll.id !== id),
+      );
+      return { previous };
+    },
+    onSuccess: () => {
+      toast.success("Roll excluído.");
+    },
+    onError: (e: any, _id, context) => {
+      context?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+      toast.error(e.message);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["rolls_prestadora"] });
+    },
   });
 
   // Check if any match is the child route (has the id param)
@@ -114,7 +130,7 @@ function Page() {
   };
 
   return (
-    <AnimatedPage>
+    <AnimatedPage className="no-hover-motion">
       <PageHeader title="Roll Prestadora" description="Contagem de peças devolvida pela prestadora, usada na conferência."
         actions={<Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Roll</Button>} />
 
@@ -129,7 +145,7 @@ function Page() {
         </div>
       </FilterBar>
 
-      <div className="rounded-md border bg-card overflow-hidden card-hover">
+      <div className="rounded-md border bg-card overflow-hidden">
         <div className="max-h-[calc(100vh-280px)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
@@ -141,8 +157,8 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {rolls.map((r: any, index: number) => (
-              <tr key={r.id} className="border-t hover:bg-muted/30" style={{ animationDelay: `${index * 30}ms` }}>
+            {rolls.map((r: any) => (
+              <tr key={r.id} className="border-t">
                 <td className="px-4 py-2 font-mono">{r.numero}</td>
                 <td className="px-4 py-2">{brDate(r.data_roll)}</td>
                 <td className="px-4 py-2 text-muted-foreground">{r.prestadoras?.nome ?? "—"}</td>

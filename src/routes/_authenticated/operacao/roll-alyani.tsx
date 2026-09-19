@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { AnimatedPage } from "@/components/ui/animated-page";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { brl, brDate, firstOfMonth, lastOfMonth, isoDate } from "@/lib/format";
+import { calculateRollFinancialTotals, formatRevenuePercent } from "@/lib/calculos";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/operacao/roll-alyani")({
@@ -46,19 +47,6 @@ function isValidVencimento(value: string | null | undefined) {
   return !value || (value >= MIN_VENCIMENTO && value <= MAX_VENCIMENTO);
 }
 
-
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatRevenuePercent(value: number, receita: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(receita) || receita === 0) {
-    return "0,00%";
-  }
-
-  return `${percentFormatter.format((value * 100) / receita)}%`;
-}
 
 function Page() {
   const matches = useMatches();
@@ -130,16 +118,10 @@ function Page() {
     );
   }, [rolls, filters.q]);
 
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, r: any) => ({
-        receita: acc.receita + Number(r.total_receita ?? 0),
-        custo: acc.custo + Number(r.total_custo ?? 0),
-        lucro: acc.lucro + Number(r.total_lucro ?? 0),
-      }),
-      { receita: 0, custo: 0, lucro: 0 },
-    );
-  }, [rows]);
+  const totals = useMemo(
+    () => calculateRollFinancialTotals(rows as any[]),
+    [rows],
+  );
 
   const create = useMutation({
     mutationFn: async () => {
@@ -224,7 +206,7 @@ function Page() {
 
 
   return (
-    <AnimatedPage>
+    <AnimatedPage className="no-hover-motion">
       <PageHeader
         title="Roll Alyani"
         description="Registro operacional das peças recebidas dos hotéis."
@@ -328,7 +310,7 @@ function Page() {
         </div>
       </div>
 
-      <div className="rounded-md border bg-card overflow-hidden card-hover">
+      <div className="rounded-md border bg-card overflow-hidden">
         <div className="max-h-[calc(100vh-420px)] overflow-auto">
           <table className="w-full text-sm">
             <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
@@ -346,12 +328,8 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r: any, index: number) => (
-                <tr
-                  key={r.id}
-                  className="border-t hover:bg-muted/30"
-                  style={{ animationDelay: `${index * 30}ms` }}
-                >
+              {rows.map((r: any) => (
+                <tr key={r.id} className="border-t">
                   <td className="px-4 py-2 font-mono">{r.numero}</td>
                   <td className="px-4 py-2">{brDate(r.data_roll)}</td>
                   <td className="px-4 py-2">{r.hoteis?.nome ?? "—"}</td>
@@ -487,14 +465,10 @@ function Page() {
                   min={MIN_VENCIMENTO}
                   max={MAX_VENCIMENTO}
                   value={novo.data_vencimento}
-                  onChange={(e) =>
-                    setNovo({ ...novo, data_vencimento: e.target.value })
-                  }
-                  onBlur={(e) => {
+                  onChange={(e) => {
                     const value = e.target.value;
-                    if (value && !isValidVencimento(value)) {
-                      toast.error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
-                      setNovo((current) => ({ ...current, data_vencimento: "" }));
+                    if (isValidVencimento(value)) {
+                      setNovo({ ...novo, data_vencimento: value });
                     }
                   }}
                 />
