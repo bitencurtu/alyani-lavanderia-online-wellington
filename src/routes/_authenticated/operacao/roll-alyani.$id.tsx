@@ -488,6 +488,7 @@ function SearchablePecaSelect({
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const internalTriggerRef = useRef<HTMLButtonElement | null>(null);
   const selected = pecas.find((p) => p.id === value);
 
@@ -512,7 +513,13 @@ function SearchablePecaSelect({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           ref={setTriggerRef}
@@ -521,6 +528,26 @@ function SearchablePecaSelect({
           role="combobox"
           aria-expanded={open}
           className="h-8 w-full justify-between px-3 font-normal"
+          onKeyDown={(e) => {
+            // Quando o foco chega neste campo pelo Tab, o usuário pode começar
+            // a digitar imediatamente, sem precisar clicar para abrir a busca.
+            if (
+              e.key.length === 1 &&
+              !e.ctrlKey &&
+              !e.metaKey &&
+              !e.altKey
+            ) {
+              e.preventDefault();
+              setSearch(e.key);
+              setOpen(true);
+              return;
+            }
+
+            if (e.key === "Enter" || e.key === "ArrowDown") {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
         >
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected?.nome ?? placeholder}
@@ -535,6 +562,8 @@ function SearchablePecaSelect({
         <Command>
           <CommandInput
             placeholder="Digite para localizar a peça…"
+            value={search}
+            onValueChange={setSearch}
             autoFocus
             onKeyDown={(e) => {
               if (e.key !== "Tab" || e.shiftKey) return;
