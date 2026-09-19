@@ -13,6 +13,7 @@ import {
   Wallet,
   FileBarChart,
   Settings,
+  History,
   LogOut,
   Menu,
 } from "lucide-react";
@@ -62,6 +63,7 @@ const groups: { label: string; items: Item[] }[] = [
     label: "",
     items: [
       { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
+      { to: "/historico", label: "Histórico", icon: History },
       { to: "/configuracoes", label: "Configurações", icon: Settings },
     ],
   },
