@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/page-header";
@@ -21,34 +21,10 @@ type Peca = { id: string; nome: string; status: "ativo" | "inativo" };
 type PecaForm = { id?: string; nome: string; status: "ativo" | "inativo" };
 
 function Page() {
-  const hiddenKey = "hiddenPecasIds";
   const qc = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({});
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PecaForm | null>(null);
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const raw = window.localStorage.getItem(hiddenKey);
-      if (!raw) return new Set();
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return new Set();
-      return new Set(arr.filter((x) => typeof x === "string"));
-    } catch {
-      return new Set();
-    }
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(hiddenKey);
-      if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return;
-      setHiddenIds(new Set(arr.filter((x) => typeof x === "string")));
-    } catch {}
-  }, []);
 
   const { data = [] } = useQuery({
     queryKey: ["pecas"],
@@ -61,8 +37,8 @@ function Page() {
 
   const rows = useMemo(() => {
     const q = (filters.q ?? "").toLowerCase().trim();
-    return data.filter((p) => p.status === "ativo" && !hiddenIds.has(p.id) && (!q || p.nome.toLowerCase().includes(q)));
-  }, [data, filters.q, hiddenIds]);
+    return data.filter((p) => p.status === "ativo" && (!q || p.nome.toLowerCase().includes(q)));
+  }, [data, filters.q]);
 
   const save = useMutation({
     mutationFn: async (h: Partial<PecaForm>) => {
@@ -159,21 +135,6 @@ function Page() {
 
 onSuccess: (result) => {
   if (result.reactivatedId) {
-    setHiddenIds((prev) => {
-      const next = new Set(prev);
-
-      next.delete(result.reactivatedId);
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          hiddenKey,
-          JSON.stringify([...next]),
-        );
-      }
-
-      return next;
-    });
-
     toast.success("Peça reativada com os valores zerados.");
   } else {
     toast.success("Peça salva.");
@@ -191,24 +152,31 @@ onError: (e: any) => toast.error(e.message),});
 
   const deactivate = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pecas").update({ status: "inativo" }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Peça desativada.");
-      qc.invalidateQueries({ queryKey: ["pecas"] });
-      qc.invalidateQueries({ queryKey: ["pecas-lite"] });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+      const { data: updated, error } = await supabase
+        .from("pecas")
+        .update({ status: "inativo" })
+        .eq("id", id)
+        .select("id,status")
+        .single();
 
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pecas").delete().eq("id", id);
       if (error) throw error;
+      if (!updated || updated.status !== "inativo") {
+        throw new Error("Não foi possível excluir a peça.");
+      }
     },
-    onSuccess: () => { toast.success("Peça excluída."); qc.invalidateQueries({ queryKey: ["pecas"] }); setOpen(false); },
-    onError: (e: any) => toast.error(e.message),
+    onSuccess: async () => {
+      // A exclusão é lógica (status=inativo). Isso preserva o histórico dos ROLs,
+      // mas remove a peça de todos os seletores que carregam somente peças ativas.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["pecas"] }),
+        qc.invalidateQueries({ queryKey: ["pecas-lite"] }),
+        qc.invalidateQueries({ queryKey: ["precos"] }),
+      ]);
+      toast.success("Peça excluída.");
+      setOpen(false);
+      setEditing(null);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Erro ao excluir a peça."),
   });
 
   return (
@@ -234,16 +202,9 @@ onError: (e: any) => toast.error(e.message),});
                     size="icon"
                     disabled={deactivate.isPending}
                     onClick={() => {
-                      if (!window.confirm("Tem certeza que deseja excluir esta peça?")) return;
-                      setHiddenIds((prev) => {
-                        const next = new Set(prev);
-                        next.add(h.id);
-                        if (typeof window !== "undefined") {
-                          window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
-                        }
-                        return next;
-                      });
-                      deactivate.mutate(h.id);
+                      if (confirm(`Tem certeza que deseja excluir a peça "${h.nome}"?`)) {
+                        deactivate.mutate(h.id);
+                      }
                     }}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -273,10 +234,10 @@ onError: (e: any) => toast.error(e.message),});
                   <Button
                     type="button"
                     variant="destructive"
-                    disabled={remove.isPending}
+                    disabled={deactivate.isPending}
                     onClick={() => {
                       if (confirm("Tem certeza que deseja excluir esta peça?") && editing.id) {
-                        remove.mutate(editing.id);
+                        deactivate.mutate(editing.id);
                       }
                     }}
                   >
