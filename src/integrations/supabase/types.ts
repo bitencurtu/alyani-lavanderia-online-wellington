@@ -679,6 +679,9 @@ export type Database = {
         }
         Returns: string
       }
+      can_finance: { Args: { _user_id: string }; Returns: boolean }
+      can_operate: { Args: { _user_id: string }; Returns: boolean }
+      get_my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -687,6 +690,14 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      is_team: { Args: { _user_id: string }; Returns: boolean }
+      set_user_role: {
+        Args: {
+          p_role: Database["public"]["Enums"]["app_role"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       set_pagamentos_status_transaction: {
         Args: {
           p_ids: string[]
@@ -697,7 +708,7 @@ export type Database = {
       tg_roll_recalc: { Args: { _roll_id: string }; Returns: undefined }
     }
     Enums: {
-      app_role: "admin" | "operador"
+      app_role: "admin" | "operador" | "financeiro"
       status_ativo: "ativo" | "inativo"
       status_cobranca: "pendente" | "pago" | "atrasado" | "cancelado"
       status_pagamento: "pendente" | "pago" | "cancelado"
@@ -828,7 +839,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "operador"],
+      app_role: ["admin", "operador", "financeiro"],
       status_ativo: ["ativo", "inativo"],
       status_cobranca: ["pendente", "pago", "atrasado", "cancelado"],
       status_pagamento: ["pendente", "pago", "cancelado"],

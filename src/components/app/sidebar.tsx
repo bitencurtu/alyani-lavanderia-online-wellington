@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   GitCompare,
   Wallet,
+  ReceiptText,
   FileBarChart,
   Settings,
   History,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { canAccessPath, type AppRole } from "@/lib/permissoes";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
@@ -57,6 +59,7 @@ const groups: { label: string; items: Item[] }[] = [
     label: "Financeiro",
     items: [
       { to: "/financeiro/pagamentos", label: "Pagamentos", icon: Wallet },
+      { to: "/financeiro/cobrancas", label: "Cobranças", icon: ReceiptText },
     ],
   },
   {
@@ -69,9 +72,17 @@ const groups: { label: string; items: Item[] }[] = [
   },
 ];
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({ role, onNavigate }: { role: AppRole; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => pathname === to || pathname.startsWith(to + "/");
+
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessPath(role, item.to)),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-4 h-14 flex items-center justify-between border-b border-sidebar-border">
@@ -84,8 +95,8 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         <ThemeToggle />
       </div>
       <nav className="flex-1 overflow-y-auto py-3">
-        {groups.map((g, i) => (
-          <div key={i} className="mb-3">
+        {visibleGroups.map((g, i) => (
+          <div key={`${g.label}-${i}`} className="mb-3">
             {g.label && (
               <div className="px-4 pb-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
                 {g.label}
@@ -133,15 +144,15 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({ role }: { role: AppRole }) {
   return (
     <aside className="hidden md:flex h-screen w-60 shrink-0 border-r border-sidebar-border">
-      <SidebarBody />
+      <SidebarBody role={role} />
     </aside>
   );
 }
 
-export function MobileTopBar() {
+export function MobileTopBar({ role }: { role: AppRole }) {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -156,7 +167,7 @@ export function MobileTopBar() {
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border">
             <SheetTitle className="sr-only">Menu</SheetTitle>
-            <SidebarBody onNavigate={() => setOpen(false)} />
+            <SidebarBody role={role} onNavigate={() => setOpen(false)} />
           </SheetContent>
         </Sheet>
         <div className="flex flex-col leading-tight">
