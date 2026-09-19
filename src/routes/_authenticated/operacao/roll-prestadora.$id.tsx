@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,8 +42,8 @@ function Page() {
   });
 
   const { data: pecas = [] } = useQuery({
-    queryKey: ["pecas-lite"],
-    queryFn: async () => (await supabase.from("pecas").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PECAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePecas,
   });
   const { data: prestadoras = [] } = useQuery({
     queryKey: ["prestadoras-lite"],
@@ -152,11 +153,7 @@ function Page() {
                 it={i}
                 pecas={pecas as any[]}
                 onSave={(itm) => upsertItem.mutate({ ...itm, id: i.id })}
-                onRemove={() => {
-                  if (window.confirm("Tem certeza que deseja excluir este item do Roll?")) {
-                    removeItem.mutate(i.id);
-                  }
-                }}
+                onRemove={() => removeItem.mutate(i.id)}
               />
             ))}
             <tr className="border-t bg-muted/20">
@@ -190,12 +187,18 @@ function Page() {
 function ItemRow({ it, pecas, onSave, onRemove }: { it: any; pecas: any[]; onSave: (i: Item) => void; onRemove: () => void }) {
   const [local, setLocal] = useState<Item>({ id: it.id, peca_id: it.peca_id, quantidade: Number(it.quantidade) });
   const dirty = local.peca_id !== it.peca_id || local.quantidade !== Number(it.quantidade);
+  const currentIsInactive = !pecas.some((p) => p.id === local.peca_id);
   return (
     <tr className="border-t">
       <td className="px-2 py-1">
         <Select value={local.peca_id} onValueChange={(v) => setLocal({ ...local, peca_id: v })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-          <SelectContent>{pecas.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+          <SelectContent>
+            {currentIsInactive && local.peca_id && (
+              <SelectItem value={local.peca_id} disabled>{it.pecas?.nome ?? "Peça inativa"} (inativa)</SelectItem>
+            )}
+            {pecas.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+          </SelectContent>
         </Select>
       </td>
       <td className="px-2 py-1"><Input className="h-8 text-right font-mono" type="number" min={0} value={local.quantidade}

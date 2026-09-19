@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,10 +86,8 @@ function Page() {
   });
 
   const { data: pecas = [] } = useQuery({
-    queryKey: ["pecas-lite"],
-    queryFn: async () =>
-      (await supabase.from("pecas").select("id,nome").eq("status", "ativo").order("nome")).data ??
-      [],
+    queryKey: PECAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePecas,
   });
   const { data: hoteis = [] } = useQuery({
     queryKey: ["hoteis-lite"],
@@ -385,11 +384,7 @@ function Page() {
                       preco_manual: u.peca_id === it.peca_id ? Boolean(it.preco_manual) : false,
                     })
                   }
-                  onRemove={() => {
-                    if (window.confirm("Tem certeza que deseja excluir este item do Roll?")) {
-                      removeItem.mutate(it.id);
-                    }
-                  }}
+                  onRemove={() => removeItem.mutate(it.id)}
                 />
               ))}
               <tr className="border-t bg-muted/20">
@@ -484,12 +479,14 @@ function SearchablePecaSelect({
   onValueChange,
   triggerRef,
   placeholder = "Selecione a peça…",
+  selectedLabel,
 }: {
   value: string;
   pecas: any[];
   onValueChange: (value: string) => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   placeholder?: string;
+  selectedLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -554,7 +551,7 @@ function SearchablePecaSelect({
           }}
         >
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected?.nome ?? placeholder}
+            {selected?.nome ?? selectedLabel ?? placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -644,6 +641,7 @@ function ItemRow({
           value={local.peca_id}
           pecas={pecas}
           onValueChange={handlePecaChange}
+          selectedLabel={it.pecas?.nome}
           placeholder="Selecione a peça…"
         />
       </td>

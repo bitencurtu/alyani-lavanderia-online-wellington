@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-route
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchActivePecas, PECAS_LITE_QUERY_KEY } from "@/lib/pecas";
 import { PageHeader } from "@/components/app/page-header";
 import { FilterBar, type FilterState } from "@/components/app/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -38,8 +39,8 @@ function Page() {
     queryFn: async () => (await supabase.from("prestadoras").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
   });
   const { data: pecas = [] } = useQuery({
-    queryKey: ["pecas-lite"],
-    queryFn: async () => (await supabase.from("pecas").select("id,nome").eq("status", "ativo").order("nome")).data ?? [],
+    queryKey: PECAS_LITE_QUERY_KEY,
+    queryFn: fetchActivePecas,
   });
 
   const { data: rolls = [] } = useQuery({
@@ -211,11 +212,7 @@ function Page() {
                           type="button" 
                           variant="ghost" 
                           size="icon" 
-                          onClick={() => {
-                            if (window.confirm("Tem certeza que deseja remover este item?")) {
-                              setNovoItens(novoItens.filter((_, i) => i !== idx));
-                            }
-                          }}>
+                          onClick={() => setNovoItens(novoItens.filter((_, i) => i !== idx))}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
