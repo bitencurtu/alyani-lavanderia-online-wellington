@@ -24,6 +24,7 @@ import { canAccessPath, type AppRole } from "@/lib/permissoes";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
+import { SystemAlertsButton } from "./system-alerts";
 
 type Item = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -92,7 +93,13 @@ function SidebarBody({ role, onNavigate }: { role: AppRole; onNavigate?: () => v
             Lavanderia
           </span>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <SystemAlertsButton
+            role={role}
+            className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          />
+          <ThemeToggle />
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-3">
         {visibleGroups.map((g, i) => (
@@ -175,7 +182,13 @@ export function MobileTopBar({ role }: { role: AppRole }) {
           <span className="text-[9px] uppercase tracking-widest text-sidebar-foreground/60">Lavanderia</span>
         </div>
       </div>
-      <ThemeToggle />
+      <div className="flex items-center gap-1">
+        <SystemAlertsButton
+          role={role}
+          className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+        />
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
