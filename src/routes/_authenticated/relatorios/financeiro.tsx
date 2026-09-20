@@ -63,13 +63,13 @@ type ReceitaRow = {
   diferencaApurada: number;
   receitaProvisoria: number;
   receitaEfetiva: number;
-  percentualProvisao: number;
-  percentualEfetivo: number;
+  percentualProvisao: number | null;
+  percentualEfetivo: number | null;
   imposto: number;
   liquidoPosImpostoEfetivo: number;
-  percentualPosImpostoEfetivo: number;
+  percentualPosImpostoEfetivo: number | null;
   liquidoPosImpostoProvisorio: number;
-  percentualPosImpostoProvisorio: number;
+  percentualPosImpostoProvisorio: number | null;
   statusRecebimento: string;
   dataRecebimento: string;
   rolls: number;
@@ -119,12 +119,13 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-function percent(value: number, base: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(base) || base === 0) return 0;
+function percent(value: number, base: number): number | null {
+  if (!Number.isFinite(value) || !Number.isFinite(base) || base === 0) return null;
   return (value * 100) / base;
 }
 
-function percentLabel(value: number) {
+function percentLabel(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return `${value.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -198,7 +199,7 @@ function Page() {
       let query = supabase
         .from("rolls_alyani")
         .select(
-          "id,numero,data_roll,hotel_id,prestadora_id,total_receita,total_custo,hoteis(id,nome),prestadoras(id,nome),rolls_alyani_itens(peca_id,quantidade,valor_unit,valor_total,custo_unit,custo_total),cobrancas(id,valor,vencimento,status,data_pagamento),pagamentos(id,valor,status,data_pagamento)",
+          "id,numero,data_roll,hotel_id,prestadora_id,total_receita,total_custo,hoteis(id,nome),prestadoras(id,nome),rolls_alyani_itens(peca_id,quantidade,valor_unit,valor_total,custo_unit,custo_total),cobrancas(id,valor,vencimento,status,data_pagamento)",
         )
         .gte("data_roll", dataInicio)
         .lte("data_roll", dataFim)
@@ -333,9 +334,7 @@ function Page() {
 
         for (const roll of group.rolls) {
           const cobranca = firstRelation<any>(roll.cobrancas);
-          const pagamento = firstRelation<any>(roll.pagamentos);
           const cobrancaCancelada = cobranca?.status === "cancelado";
-          const pagamentoCancelado = pagamento?.status === "cancelado";
 
           const receberRoll = cobranca
             ? cobrancaCancelada
@@ -349,22 +348,19 @@ function Page() {
             if (!cobrancaCancelada && cobranca.vencimento) vencimentos.add(String(cobranca.vencimento));
           }
 
-          const apuradoRoll = pagamentoCancelado ? 0 : getRollCost(roll);
+          // "VLR APURADO (ALYANI)" da planilha: quantidade informada pela Alyani × custo unitário
+          // histórico da prestadora. É um valor operacional e não depende do status de Pagamentos.
+          const apuradoRoll = getRollCost(roll);
           valorApurado = addMoney(valorApurado, apuradoRoll);
-
-          if (pagamentoCancelado) continue;
 
           const conferencia = conferenciasPorRoll.get(String(roll.id));
           const rollPrestadora = firstRelation<any>(conferencia?.rolls_prestadora);
           const itensPrestadora = (rollPrestadora?.rolls_prestadora_itens ?? []) as any[];
 
-          if (!conferencia || itensPrestadora.length === 0) {
-            valorTeixeira = addMoney(
-              valorTeixeira,
-              pagamento ? roundMoney(pagamento.valor) : apuradoRoll,
-            );
-            continue;
-          }
+          // "VALOR A PAGAR (TEIXEIRA)" da planilha só existe quando há quantidade
+          // efetivamente informada pela prestadora. Sem Roll Prestadora/conferência, fica 0,00
+          // em vez de copiar o apurado da Alyani e mascarar que o valor efetivo ainda não chegou.
+          if (!conferencia || itensPrestadora.length === 0) continue;
 
           const custoSnapshotPorPeca = new Map<string, number>();
           for (const item of (roll.rolls_alyani_itens ?? []) as any[]) {
@@ -402,16 +398,11 @@ function Page() {
             rollsConferidos += 1;
           }
 
-          // Se a conferência existe mas alguma peça não tem custo histórico, evita
-          // reduzir artificialmente o valor: usa o pagamento/apurado como fallback.
-          valorTeixeira = addMoney(
-            valorTeixeira,
-            faltantes > 0
-              ? pagamento
-                ? roundMoney(pagamento.valor)
-                : apuradoRoll
-              : custoPrestadoraRoll,
-          );
+          // Soma apenas o que realmente foi informado pela prestadora. Se alguma peça
+          // estiver sem custo de referência, ela fica sinalizada como pendência em vez de
+          // substituir o valor pelo apurado da Alyani. Isso mantém F e G independentes,
+          // exatamente como no relatório original.
+          valorTeixeira = addMoney(valorTeixeira, custoPrestadoraRoll);
         }
 
         const diferencaApurada = subtractMoney(valorApurado, valorTeixeira);
@@ -665,16 +656,18 @@ function Page() {
     };
 
     const paintHeaderCell = (x: number, y: number, width: number, height: number, index: number) => {
+      // Mesma organização visual da planilha, mas usando a paleta azul/cinza do ERP.
       if (index <= 10) {
-        doc.setFillColor(255, 242, 0);
-        doc.setTextColor(20, 20, 20);
+        doc.setFillColor(45, 61, 91);
+        doc.setTextColor(255, 255, 255);
       } else if (index <= 16) {
-        doc.setFillColor(17, 24, 39);
-        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(230, 235, 243);
+        doc.setTextColor(38, 48, 68);
       } else {
-        doc.setFillColor(107, 125, 40);
-        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(213, 222, 235);
+        doc.setTextColor(38, 48, 68);
       }
+      doc.setDrawColor(201, 210, 223);
       doc.rect(x, y, width, height, "FD");
     };
 
@@ -696,11 +689,11 @@ function Page() {
         const index = offset + 4;
         const width = widths[index];
         if ([4, 5, 6, 7, 8, 9, 12, 13, 15].includes(index)) {
-          doc.setFillColor(122, 143, 56);
-          doc.setTextColor(255, 255, 255);
+          doc.setFillColor(238, 242, 247);
+          doc.setTextColor(38, 48, 68);
         } else {
-          doc.setFillColor(246, 246, 240);
-          doc.setTextColor(20, 20, 20);
+          doc.setFillColor(247, 249, 252);
+          doc.setTextColor(38, 48, 68);
         }
         doc.rect(x, startY + summaryLabelHeight, width, summaryValueHeight, "FD");
         doc.setFont("helvetica", "bold");
@@ -1052,8 +1045,7 @@ function Page() {
                       ].map((label) => (
                         <td
                           key={label}
-                          className="border border-border px-2 py-2 text-center font-bold text-black"
-                          style={{ backgroundColor: "#fff200" }}
+                          className="border border-border bg-primary px-2 py-2 text-center font-bold text-primary-foreground"
                         >
                           {label}
                         </td>
@@ -1068,35 +1060,33 @@ function Page() {
                       ].map((label) => (
                         <td
                           key={label}
-                          className="border border-border px-2 py-2 text-center font-bold text-white"
-                          style={{ backgroundColor: "#111827" }}
+                          className="border border-border bg-secondary px-2 py-2 text-center font-bold text-secondary-foreground"
                         >
                           {label}
                         </td>
                       ))}
                       <td
-                        className="border border-border px-2 py-2 text-center font-bold text-white"
-                        style={{ backgroundColor: "#6b7d28" }}
+                        className="border border-border bg-accent px-2 py-2 text-center font-bold text-accent-foreground"
                       >
                         PAGO?
                       </td>
                     </tr>
                     <tr className="font-semibold">
                       <td colSpan={4} className="border-0"></td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorReceber)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorTeixeira)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.valorApurado)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.diferencaApurada)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.receitaProvisoria)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.receitaEfetiva)}</td>
-                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualProvisao)}</td>
-                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualEfetivo)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.imposto)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.liquidoPosImpostoEfetivo)}</td>
-                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</td>
-                      <td className="border border-border px-2 py-2 text-center font-mono text-white" style={{ backgroundColor: "#7a8f38" }}>{brl(receitaTotals.liquidoPosImpostoProvisorio)}</td>
-                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>{percentLabel(receitaTotals.percentualPosImpostoProvisorio)}</td>
-                      <td className="border border-border px-2 py-2 text-center" style={{ backgroundColor: "#f6f6f0" }}>—</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorReceber)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorTeixeira)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorApurado)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.diferencaApurada)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.receitaProvisoria)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.receitaEfetiva)}</td>
+                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualProvisao)}</td>
+                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualEfetivo)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.imposto)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</td>
+                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</td>
+                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.liquidoPosImpostoProvisorio)}</td>
+                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualPosImpostoProvisorio)}</td>
+                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">—</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1119,8 +1109,7 @@ function Page() {
                       ].map((label, index) => (
                         <th
                           key={label}
-                          className={`${index === 0 ? "sticky left-0 z-20 min-w-[180px]" : ""} border border-border px-2 py-2 text-center font-bold text-black whitespace-normal`}
-                          style={{ backgroundColor: "#fff200" }}
+                          className={`${index === 0 ? "sticky left-0 z-20 min-w-[180px]" : ""} border border-border bg-primary px-2 py-2 text-center font-bold text-primary-foreground whitespace-normal`}
                         >
                           {label}
                         </th>
@@ -1135,15 +1124,13 @@ function Page() {
                       ].map((label) => (
                         <th
                           key={label}
-                          className="border border-border px-2 py-2 text-center font-bold text-white whitespace-normal"
-                          style={{ backgroundColor: "#111827" }}
+                          className="border border-border bg-secondary px-2 py-2 text-center font-bold text-secondary-foreground whitespace-normal"
                         >
                           {label}
                         </th>
                       ))}
                       <th
-                        className="border border-border px-2 py-2 text-center font-bold text-white whitespace-normal"
-                        style={{ backgroundColor: "#6b7d28" }}
+                        className="border border-border bg-accent px-2 py-2 text-center font-bold text-accent-foreground whitespace-normal"
                       >
                         PAGO?
                       </th>
@@ -1152,7 +1139,7 @@ function Page() {
                   <tbody>
                     {receitaRows.map((row) => {
                       const teixeiraConferido = row.rollsConferidos === row.rolls && row.custoSemReferencia === 0;
-                      const teixeiraParcial = row.rollsConferidos > 0 && !teixeiraConferido;
+                      const teixeiraParcial = row.custoSemReferencia > 0 || (row.rollsConferidos > 0 && !teixeiraConferido);
                       const pagoTexto = row.dataRecebimento
                         ? brDate(row.dataRecebimento)
                         : row.statusRecebimento === "Pago"
@@ -1170,7 +1157,7 @@ function Page() {
                           <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorReceber)}</td>
                           <td
                             className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap"
-                            title={teixeiraConferido ? "Valor conferido com Roll Prestadora" : teixeiraParcial ? "Parte conferida; restante estimado" : "Valor estimado por Pagamentos/apuração"}
+                            title={teixeiraConferido ? "Valor conferido com Roll Prestadora" : teixeiraParcial ? "Conferência parcial: soma apenas itens com custo identificado" : "Sem conferência com Roll Prestadora: valor efetivo ainda não informado"}
                           >
                             {brl(row.valorTeixeira)}
                           </td>
@@ -1204,7 +1191,7 @@ function Page() {
             </div>
 
             <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-              Assim como na planilha, cada linha representa um fechamento por cliente e vencimento. O valor da Teixeira usa a conferência quando disponível e estimativa quando ainda não houver conferência completa.
+              Fórmulas revisadas conforme a planilha original: diferença = apurado Alyani − Teixeira; receita provisória = receber − apurado; receita efetiva = receber − Teixeira; imposto = receber × percentual. Sem conferência da prestadora, o valor da Teixeira permanece R$ 0,00 em vez de ser estimado.
             </div>
           </div>
         </TabsContent>
