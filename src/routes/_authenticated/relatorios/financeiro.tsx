@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { jsPDF } from "jspdf";
@@ -153,6 +153,7 @@ function getRecebimentoStatus(cobrancas: any[]) {
 
 function Page() {
   const [activeTab, setActiveTab] = useState("receita");
+  const [expandedReceitaRowId, setExpandedReceitaRowId] = useState<string | null>(null);
   const [dataInicio, setDataInicio] = useState(firstOfMonth());
   const [dataFim, setDataFim] = useState(lastOfMonth());
   const [hotelId, setHotelId] = useState<string | undefined>();
@@ -1069,166 +1070,198 @@ function Page() {
 
         <TabsContent value="receita" className="mt-0">
           <div className="rounded-md border bg-card overflow-hidden mb-6">
-            <div className="border-b px-4 py-5 text-center">
-              <div className="text-xl font-bold tracking-wide">RELATÓRIO DE RECEITA</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Período filtrado: {brDate(dataInicio)} a {brDate(dataFim)}
+            <div className="border-b px-4 py-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-base font-semibold">Resultado dos clientes</div>
+                  <div className="text-xs text-muted-foreground">
+                    Visão financeira dos fechamentos entre {brDate(dataInicio)} e {brDate(dataFim)}.
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">{receitaRows.length} fechamento(s)</div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="min-w-[2050px] p-3">
-                <table className="w-full border-collapse text-[10px] mb-3">
-                  <tbody>
-                    <tr>
-                      <td colSpan={4} className="border-0"></td>
-                      {[
-                        "VLR A RECEBER",
-                        "VALOR A PAGAR",
-                        "VLR APURADO",
-                        "# DIF R$ APURADO",
-                        "RECEITA LIQ. PROV",
-                        "RECEITA LIQ.",
-                        "% PROVISÃO",
-                      ].map((label) => (
-                        <td
-                          key={label}
-                          className="border border-border bg-primary px-2 py-2 text-center font-bold text-primary-foreground"
-                        >
-                          {label}
-                        </td>
-                      ))}
-                      {[
-                        "% EFETIVO",
-                        "IMPOSTO",
-                        "LIQ. POS IMPOSTO",
-                        "% POS IMP. EFET",
-                        "LIQ. POS IMP PROV",
-                        "% POS IMP. PROV",
-                      ].map((label) => (
-                        <td
-                          key={label}
-                          className="border border-border bg-secondary px-2 py-2 text-center font-bold text-secondary-foreground"
-                        >
-                          {label}
-                        </td>
-                      ))}
-                      <td
-                        className="border border-border bg-accent px-2 py-2 text-center font-bold text-accent-foreground"
-                      >
-                        PAGO?
-                      </td>
-                    </tr>
-                    <tr className="font-semibold">
-                      <td colSpan={4} className="border-0"></td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorReceber)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorTeixeira)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.valorApurado)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.diferencaApurada)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.receitaProvisoria)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.receitaEfetiva)}</td>
-                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualProvisao)}</td>
-                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualEfetivo)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.imposto)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</td>
-                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</td>
-                      <td className="border border-border bg-muted px-2 py-2 text-center font-mono text-foreground">{brl(receitaTotals.liquidoPosImpostoProvisorio)}</td>
-                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">{percentLabel(receitaTotals.percentualPosImpostoProvisorio)}</td>
-                      <td className="border border-border bg-secondary px-2 py-2 text-center text-secondary-foreground">—</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div className="p-4 border-b">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">A receber</div>
+                  <div className="text-xl font-semibold">{brl(receitaTotals.valorReceber)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Total cobrado dos clientes.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Custo Teixeira</div>
+                  <div className="text-xl font-semibold">{brl(receitaTotals.valorTeixeira)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Custo efetivo já conferido.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Receita efetiva</div>
+                  <div className="text-xl font-semibold">{brl(receitaTotals.receitaEfetiva)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">A receber − custo Teixeira.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Imposto</div>
+                  <div className="text-xl font-semibold">{brl(receitaTotals.imposto)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{imposto.toLocaleString("pt-BR")}% sobre o valor a receber.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Resultado pós-imposto</div>
+                  <div className={`text-xl font-semibold ${receitaTotals.liquidoPosImpostoEfetivo >= 0 ? "text-success" : "text-destructive"}`}>
+                    {brl(receitaTotals.liquidoPosImpostoEfetivo)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">Resultado efetivo após imposto.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Margem pós-imposto</div>
+                  <div className="text-xl font-semibold">{percentLabel(receitaTotals.percentualPosImpostoEfetivo)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Sobre o valor total a receber.</div>
+                </div>
+              </div>
 
-                <table className="w-full border-collapse text-[11px]">
-                  <thead>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Apurado Alyani</div>
+                  <div className="mt-1 font-semibold">{brl(receitaTotals.valorApurado)}</div>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Resultado previsto</div>
+                  <div className="mt-1 font-semibold">{brl(receitaTotals.receitaProvisoria)}</div>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Diferença apurada</div>
+                  <div className={`mt-1 font-semibold ${receitaTotals.diferencaApurada > 0 ? "text-success" : receitaTotals.diferencaApurada < 0 ? "text-destructive" : ""}`}>
+                    {brl(receitaTotals.diferencaApurada)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <div className="text-sm font-semibold">Fechamentos por cliente</div>
+                  <div className="text-xs text-muted-foreground">
+                    Resumo principal. Use “Detalhes” para abrir os cálculos completos de cada fechamento.
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
                     <tr>
-                      {[
-                        "HOTEL",
-                        "PERIODO INICIAL",
-                        "PERIODO FINAL",
-                        "VENCIMENTO",
-                        "VLR A RECEBER",
-                        "VALOR A PAGAR (TEIXEIRA)",
-                        "VLR APURADO (ALYANI)",
-                        "# DIF R$ APURADO",
-                        "RECEITA LIQ. PROV",
-                        "RECEITA LIQ EFETIVA",
-                        "% PROVISÃO",
-                      ].map((label, index) => (
-                        <th
-                          key={label}
-                          className={`${index === 0 ? "sticky left-0 z-20 min-w-[180px]" : ""} border border-border bg-primary px-2 py-2 text-center font-bold text-primary-foreground whitespace-normal`}
-                        >
-                          {label}
-                        </th>
-                      ))}
-                      {[
-                        "% EFETIVO",
-                        "IMPOSTO",
-                        "LIQ. POS IMPOSTO",
-                        "% POS IMP. EFET",
-                        "LIQ. POS IMP PROV",
-                        "% POS IMP. PROV",
-                      ].map((label) => (
-                        <th
-                          key={label}
-                          className="border border-border bg-secondary px-2 py-2 text-center font-bold text-secondary-foreground whitespace-normal"
-                        >
-                          {label}
-                        </th>
-                      ))}
-                      <th
-                        className="border border-border bg-accent px-2 py-2 text-center font-bold text-accent-foreground whitespace-normal"
-                      >
-                        PAGO?
-                      </th>
+                      <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                      <th className="text-left px-3 py-2 font-medium">Período</th>
+                      <th className="text-left px-3 py-2 font-medium">Vencimento</th>
+                      <th className="text-right px-3 py-2 font-medium">A receber</th>
+                      <th className="text-right px-3 py-2 font-medium">Teixeira</th>
+                      <th className="text-right px-3 py-2 font-medium">Receita efetiva</th>
+                      <th className="text-right px-3 py-2 font-medium">Pós-imposto</th>
+                      <th className="text-center px-3 py-2 font-medium">Margem</th>
+                      <th className="text-center px-3 py-2 font-medium">Recebimento</th>
+                      <th className="text-right px-3 py-2 font-medium">Detalhes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {receitaRows.map((row) => {
                       const teixeiraConferido = row.rollsConferidos === row.rolls && row.custoSemReferencia === 0;
                       const teixeiraParcial = row.custoSemReferencia > 0 || (row.rollsConferidos > 0 && !teixeiraConferido);
+                      const teixeiraStatus = teixeiraConferido ? "Conferido" : teixeiraParcial ? "Parcial" : "Sem conferência";
                       const pagoTexto = row.dataRecebimento
                         ? brDate(row.dataRecebimento)
                         : row.statusRecebimento === "Pago"
-                          ? "PAGO"
-                          : row.statusRecebimento.toUpperCase();
+                          ? "Pago"
+                          : row.statusRecebimento;
+                      const expanded = expandedReceitaRowId === row.rowId;
 
                       return (
-                        <tr key={row.rowId} className="border-t">
-                          <td className="sticky left-0 z-10 border border-border bg-card px-2 py-2 text-center font-medium whitespace-nowrap">
-                            {row.hotel}
-                          </td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{brDate(row.periodoInicial)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{brDate(row.periodoFinal)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{row.vencimento}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorReceber)}</td>
-                          <td
-                            className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap"
-                            title={teixeiraConferido ? "Valor conferido com Roll Prestadora" : teixeiraParcial ? "Conferência parcial: soma apenas itens com custo identificado" : "Sem conferência com Roll Prestadora: valor efetivo ainda não informado"}
-                          >
-                            {brl(row.valorTeixeira)}
-                          </td>
-                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorApurado)}</td>
-                          <td className={`border border-border px-2 py-2 text-right font-mono whitespace-nowrap ${row.diferencaApurada !== 0 ? "font-semibold" : "text-muted-foreground"}`}>{brl(row.diferencaApurada)}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.receitaProvisoria)}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.receitaEfetiva)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualProvisao)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualEfetivo)}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.imposto)}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono font-semibold whitespace-nowrap">{brl(row.liquidoPosImpostoEfetivo)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualPosImpostoEfetivo)}</td>
-                          <td className="border border-border px-2 py-2 text-right font-mono whitespace-nowrap">{brl(row.liquidoPosImpostoProvisorio)}</td>
-                          <td className="border border-border px-2 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualPosImpostoProvisorio)}</td>
-                          <td className={`border border-border px-2 py-2 text-center font-medium whitespace-nowrap ${statusClass(row.statusRecebimento)}`}>
-                            {pagoTexto}
-                          </td>
-                        </tr>
+                        <Fragment key={row.rowId}>
+                          <tr className="border-t">
+                            <td className="px-3 py-2 font-medium whitespace-nowrap">{row.hotel}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {brDate(row.periodoInicial)} — {brDate(row.periodoFinal)}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.vencimento}</td>
+                            <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.valorReceber)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">
+                              <div className="font-mono">{brl(row.valorTeixeira)}</div>
+                              <div className="text-[10px] text-muted-foreground">{teixeiraStatus}</div>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(row.receitaEfetiva)}</td>
+                            <td className={`px-3 py-2 text-right font-mono font-medium whitespace-nowrap ${row.liquidoPosImpostoEfetivo >= 0 ? "text-success" : "text-destructive"}`}>
+                              {brl(row.liquidoPosImpostoEfetivo)}
+                            </td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">{percentLabel(row.percentualPosImpostoEfetivo)}</td>
+                            <td className={`px-3 py-2 text-center font-medium whitespace-nowrap ${statusClass(row.statusRecebimento)}`}>
+                              {pagoTexto}
+                            </td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setExpandedReceitaRowId(expanded ? null : row.rowId)}
+                              >
+                                {expanded ? "Fechar" : "Detalhes"}
+                              </Button>
+                            </td>
+                          </tr>
+
+                          {expanded ? (
+                            <tr className="border-t bg-muted/15">
+                              <td colSpan={10} className="px-4 py-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Apurado Alyani</div>
+                                    <div className="mt-1 font-semibold font-mono">{brl(row.valorApurado)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Diferença apurada</div>
+                                    <div className={`mt-1 font-semibold font-mono ${row.diferencaApurada > 0 ? "text-success" : row.diferencaApurada < 0 ? "text-destructive" : ""}`}>
+                                      {brl(row.diferencaApurada)}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Receita provisória</div>
+                                    <div className="mt-1 font-semibold font-mono">{brl(row.receitaProvisoria)}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">Margem {percentLabel(row.percentualProvisao)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Receita efetiva</div>
+                                    <div className="mt-1 font-semibold font-mono">{brl(row.receitaEfetiva)}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">Margem {percentLabel(row.percentualEfetivo)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Imposto</div>
+                                    <div className="mt-1 font-semibold font-mono">{brl(row.imposto)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Pós-imposto provisório</div>
+                                    <div className="mt-1 font-semibold font-mono">{brl(row.liquidoPosImpostoProvisorio)}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">{percentLabel(row.percentualPosImpostoProvisorio)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Pós-imposto efetivo</div>
+                                    <div className={`mt-1 font-semibold font-mono ${row.liquidoPosImpostoEfetivo >= 0 ? "text-success" : "text-destructive"}`}>
+                                      {brl(row.liquidoPosImpostoEfetivo)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">{percentLabel(row.percentualPosImpostoEfetivo)}</div>
+                                  </div>
+                                  <div className="rounded-md border bg-card p-3">
+                                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Conferência Teixeira</div>
+                                    <div className="mt-1 font-semibold">{teixeiraStatus}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">{row.rollsConferidos} de {row.rolls} Roll(s) conferido(s).</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
                       );
                     })}
                     {receitaRows.length === 0 ? (
                       <tr>
-                        <td colSpan={18} className="border border-border px-4 py-10 text-center text-muted-foreground">
+                        <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                           Nenhum Roll encontrado no período.
                         </td>
                       </tr>
@@ -1236,10 +1269,10 @@ function Page() {
                   </tbody>
                 </table>
               </div>
-            </div>
 
-            <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-              Fórmulas revisadas conforme a planilha original: diferença = apurado Alyani − Teixeira; receita provisória = receber − apurado; receita efetiva = receber − Teixeira; imposto = receber × percentual. Sem conferência da prestadora, o valor da Teixeira permanece R$ 0,00 em vez de ser estimado.
+              <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                A visão principal mostra apenas os números mais importantes. Os cálculos completos continuam disponíveis em “Detalhes” e seguem as fórmulas revisadas do relatório do Wellington.
+              </div>
             </div>
           </div>
         </TabsContent>
