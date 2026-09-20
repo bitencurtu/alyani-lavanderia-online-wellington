@@ -265,6 +265,11 @@ function Page() {
     [despesasFiltradas],
   );
 
+  const totalCustosRolls = useMemo(
+    () => sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))),
+    [rolls],
+  );
+
   const conferenciasPorRoll = useMemo(() => {
     const map = new Map<string, any>();
     for (const conferencia of conferencias as any[]) {
@@ -495,30 +500,19 @@ function Page() {
     totalDespesas,
   );
 
-  const itensDetalhados = useMemo(() => {
-    const detalhes = [
-      ...(rolls as any[]).map((roll: any) => ({
+  const custosRollsDetalhados = useMemo(() => {
+    return (rolls as any[])
+      .map((roll: any) => ({
         id: `roll-${roll.id}`,
+        dataRaw: String(roll.data_roll ?? ""),
         data: formatDateForDisplay(roll.data_roll),
-        origem: "Custo apurado do Roll",
-        descricao: `${roll.hoteis?.nome ?? "—"} • ${roll.prestadoras?.nome ?? "—"} • Roll ${roll.numero ?? "—"}`,
+        numero: String(roll.numero ?? "—"),
+        cliente: roll.hoteis?.nome ?? "—",
+        prestadora: roll.prestadoras?.nome ?? "—",
         valor: getRollCost(roll),
-      })),
-      ...despesasFiltradas.map((item) => ({
-        id: `desp-${item.id}`,
-        data: formatDateForDisplay(item.data),
-        origem: item.tipo || "Despesa lançada",
-        descricao: `${item.fornecedor} • ${item.descricao} • Pagamento: ${item.pagamento || "—"} • Vencimento: ${formatDateForDisplay(item.dataVencimento) || "—"}`,
-        valor: item.valor,
-      })),
-    ];
-
-    return detalhes.sort((a, b) => {
-      const aDate = parseDateOnly(a.data);
-      const bDate = parseDateOnly(b.data);
-      return (aDate?.getTime() ?? 0) - (bDate?.getTime() ?? 0);
-    });
-  }, [rolls, despesasFiltradas]);
+      }))
+      .sort((a, b) => a.dataRaw.localeCompare(b.dataRaw));
+  }, [rolls]);
 
   const resetForm = () => {
     setEditId(null);
@@ -820,110 +814,164 @@ function Page() {
   };
 
   const exportDespesasPdf = () => {
-    const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const marginLeft = 10;
-    const marginRight = 10;
-    const tableWidth = pageWidth - marginLeft - marginRight;
-    const headerHeight = 8;
-    const minimumRowHeight = 7;
-    const lineHeight = 3.2;
-    const colWidths = [24, 32, 102, 32];
-    const headers = ["DATA", "ORIGEM", "DESCRIÇÃO", "VALOR"];
-    const rows = itensDetalhados.map((item) => [item.data, item.origem, item.descricao, brl(item.valor)]);
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 10;
+    const usableWidth = pageWidth - margin * 2;
 
-    const fitFontSize = (value: string, maximumWidth: number, preferredSize: number, minimumSize = 5.2) => {
-      doc.setFontSize(preferredSize);
-      const textWidth = doc.getTextWidth(value);
-      if (textWidth <= maximumWidth || textWidth === 0) return preferredSize;
-      return Math.max(minimumSize, preferredSize * (maximumWidth / textWidth));
-    };
-
-    const drawHeader = (y: number) => {
+    const drawTitle = () => {
+      doc.setTextColor(38, 48, 68);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.2);
-      let cursorX = marginLeft;
-      headers.forEach((header, index) => {
-        const width = colWidths[index];
-        doc.rect(cursorX, y, width, headerHeight);
-        doc.text(header, cursorX + width / 2, y + 4.5, { align: "center" });
-        cursorX += width;
-      });
-    };
-
-    const prepareRow = (row: string[]) => {
+      doc.setFontSize(15);
+      doc.text("RELATÓRIO DE DESPESAS GERAIS", pageWidth / 2, 12, { align: "center" });
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.8);
-      const lines = row.map((value, index) => {
-        if (index === 0 || index === row.length - 1) return [value];
-        return doc.splitTextToSize(value, colWidths[index] - 2);
-      });
-      const maximumLines = Math.max(...lines.map((cellLines) => cellLines.length), 1);
-      return { lines, height: Math.max(minimumRowHeight, maximumLines * lineHeight + 2.5) };
+      doc.setFontSize(7.5);
+      doc.text(`Período: ${brDate(dataInicio)} a ${brDate(dataFim)}`, pageWidth / 2, 18, { align: "center" });
     };
 
-    const drawRow = (y: number, prepared: ReturnType<typeof prepareRow>) => {
-      let cursorX = marginLeft;
-      prepared.lines.forEach((textLines, index) => {
-        const width = colWidths[index];
-        doc.rect(cursorX, y, width, prepared.height);
-        const isValueColumn = index === prepared.lines.length - 1;
-        if (index === 0 || isValueColumn) {
-          const value = String(textLines[0] ?? "");
-          doc.setFontSize(fitFontSize(value, width - 2.5, 6.8));
-          doc.text(
-            value,
-            isValueColumn ? cursorX + width - 1.25 : cursorX + 1.25,
-            y + prepared.height / 2 + 0.85,
-            { align: isValueColumn ? "right" : "left" },
-          );
-        } else {
-          doc.setFontSize(6.8);
-          doc.text(textLines, cursorX + 1, y + 3);
+    const summaryItems = [
+      ["RECEITA EFETIVA PÓS-IMPOSTO", brl(receitaTotals.liquidoPosImpostoEfetivo)],
+      ["CUSTO APURADO DOS ROLLS", brl(totalCustosRolls)],
+      ["DESPESAS GERAIS", brl(totalDespesas)],
+      ["RESULTADO FINAL", brl(resultadoAposDespesas)],
+    ];
+
+    const drawSummary = (y: number) => {
+      const gap = 3;
+      const width = (usableWidth - gap * 3) / 4;
+      summaryItems.forEach(([label, value], index) => {
+        const x = margin + index * (width + gap);
+        doc.setFillColor(238, 242, 247);
+        doc.setDrawColor(201, 210, 223);
+        doc.roundedRect(x, y, width, 18, 1.5, 1.5, "FD");
+        doc.setTextColor(90, 101, 120);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.4);
+        doc.text(label, x + 2, y + 5);
+        doc.setTextColor(38, 48, 68);
+        doc.setFontSize(10);
+        doc.text(value, x + 2, y + 13);
+      });
+    };
+
+    const drawTable = (
+      title: string,
+      headers: string[],
+      widths: number[],
+      rows: string[][],
+      startY: number,
+    ) => {
+      let y = startY;
+      doc.setTextColor(38, 48, 68);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(title, margin, y);
+      y += 4;
+
+      const drawHeader = () => {
+        let x = margin;
+        doc.setFillColor(45, 61, 91);
+        doc.setTextColor(255, 255, 255);
+        doc.setDrawColor(201, 210, 223);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.5);
+        headers.forEach((header, index) => {
+          doc.rect(x, y, widths[index], 8, "FD");
+          doc.text(header, x + widths[index] / 2, y + 5, { align: "center" });
+          x += widths[index];
+        });
+        y += 8;
+        doc.setTextColor(30, 30, 30);
+      };
+
+      drawHeader();
+
+      for (const row of rows) {
+        if (y + 8 > pageHeight - 10) {
+          doc.addPage();
+          drawTitle();
+          y = 24;
+          drawHeader();
         }
-        cursorX += width;
-      });
+        let x = margin;
+        row.forEach((value, index) => {
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(220, 224, 230);
+          doc.rect(x, y, widths[index], 8, "FD");
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.3);
+          const isValue = index === row.length - 1;
+          let text = String(value ?? "");
+          while (text.length > 1 && doc.getTextWidth(text) > widths[index] - 3) text = `${text.slice(0, -2)}…`;
+          doc.text(text, isValue ? x + widths[index] - 1.5 : x + 1.5, y + 5.1, { align: isValue ? "right" : "left" });
+          x += widths[index];
+        });
+        y += 8;
+      }
+
+      if (rows.length === 0) {
+        doc.rect(margin, y, widths.reduce((acc, value) => acc + value, 0), 9);
+        doc.setFontSize(7);
+        doc.text("Nenhum registro encontrado no período.", margin + 2, y + 5.5);
+        y += 9;
+      }
+
+      return y;
     };
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("RELATÓRIO DE DESPESAS E CUSTOS", pageWidth / 2, 18, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text(`Período: ${brDate(dataInicio)} a ${brDate(dataFim)}`, marginLeft, 30);
+    drawTitle();
+    drawSummary(23);
 
-    const totalCosts = addMoney(
-      sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))),
-      totalDespesas,
+    const despesaRows = despesasFiltradas.map((item) => [
+      formatDateForDisplay(item.data),
+      formatDateForDisplay(item.dataVencimento) || "—",
+      item.fornecedor,
+      item.tipo,
+      item.descricao,
+      item.pagamento || "—",
+      brl(item.valor),
+    ]);
+    let y = drawTable(
+      "DESPESAS GERAIS",
+      ["DATA", "VENCIMENTO", "FORNECEDOR", "CATEGORIA", "DESCRIÇÃO", "PAGAMENTO", "VALOR"],
+      [22, 24, 44, 34, 78, 35, 40],
+      despesaRows,
+      47,
     );
-    doc.setFont("helvetica", "bold");
-    doc.text(`TOTAL GERAL: ${brl(totalCosts)}`, pageWidth - marginRight, 30, { align: "right" });
 
-    let currentY = 40;
-    drawHeader(currentY);
-    currentY += headerHeight;
-
-    for (const row of rows) {
-      const prepared = prepareRow(row);
-      if (currentY + prepared.height > pageHeight - 16) {
-        doc.addPage();
-        currentY = 14;
-        drawHeader(currentY);
-        currentY += headerHeight;
-      }
-      drawRow(currentY, prepared);
-      currentY += prepared.height;
+    y += 7;
+    if (y > pageHeight - 40) {
+      doc.addPage();
+      drawTitle();
+      y = 26;
     }
 
-    if (rows.length === 0) {
-      doc.rect(marginLeft, currentY, tableWidth, 10);
-      doc.text("Nenhum lançamento encontrado no período.", pageWidth / 2, currentY + 6, {
-        align: "center",
-      });
+    const custosRows = custosRollsDetalhados.map((item) => [
+      item.data,
+      item.numero,
+      item.cliente,
+      item.prestadora,
+      brl(item.valor),
+    ]);
+    drawTable(
+      "CUSTOS APURADOS DOS ROLLS",
+      ["DATA", "ROLL", "CLIENTE", "PRESTADORA", "CUSTO APURADO"],
+      [28, 28, 88, 75, 58],
+      custosRows,
+      y,
+    );
+
+    const pageCount = doc.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      doc.setPage(page);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(90, 90, 90);
+      doc.text(`Página ${page} de ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: "right" });
     }
 
-    doc.save(`relatorio-despesas-custos-${dataInicio}-a-${dataFim}.pdf`);
+    doc.save(`relatorio-despesas-gerais-${dataInicio}-a-${dataFim}.pdf`);
   };
 
   const handleExportPdf = () => {
@@ -941,8 +989,8 @@ function Page() {
   return (
     <>
       <PageHeader
-        title="Receita x Despesas/Custos"
-        description="Receita por cliente no padrão do fechamento: valor a receber, apurado Alyani, valor da prestadora, diferença, imposto e resultado efetivo."
+        title="Receita e Despesas"
+        description="Resultado dos clientes e despesas gerais no mesmo módulo, com custos operacionais separados para evitar dupla contagem."
         actions={
           <Button size="sm" onClick={handleExportPdf}>
             <Download className="h-4 w-4 mr-1" /> Baixar PDF
@@ -1015,8 +1063,8 @@ function Page() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
-          <TabsTrigger value="receita">Receita</TabsTrigger>
-          <TabsTrigger value="despesas">Despesas / Custos</TabsTrigger>
+          <TabsTrigger value="receita">Receita / Resultado</TabsTrigger>
+          <TabsTrigger value="despesas">Despesas Gerais</TabsTrigger>
         </TabsList>
 
         <TabsContent value="receita" className="mt-0">
@@ -1197,125 +1245,169 @@ function Page() {
         </TabsContent>
 
         <TabsContent value="despesas" className="mt-0">
-          <div className="rounded-md border bg-card p-4 mb-6">
-            <div className="text-sm font-semibold mb-4">Lançamentos de despesas</div>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 mb-4">
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data do lançamento</Label>
-                <Input type="date" value={form.data} onChange={(e) => setForm((prev) => ({ ...prev, data: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Vencimento</Label>
-                <Input type="date" value={form.dataVencimento} onChange={(e) => setForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fornecedor</Label>
-                <Input value={form.fornecedor} onChange={(e) => setForm((prev) => ({ ...prev, fornecedor: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Descrição</Label>
-                <Input value={form.descricao} onChange={(e) => setForm((prev) => ({ ...prev, descricao: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tipo de despesa</Label>
-                <Input value={form.tipo} onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pagamento</Label>
-                <Input placeholder="PIX, boleto, cartão..." value={form.pagamento} onChange={(e) => setForm((prev) => ({ ...prev, pagamento: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Valor</Label>
-                <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm((prev) => ({ ...prev, valor: e.target.value }))} />
-              </div>
-              <div className="md:col-span-2 lg:col-span-7 flex gap-2">
-                <Button type="submit">{editId ? "Salvar alterações" : "Adicionar despesa"}</Button>
-                {editId ? <Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button> : null}
-              </div>
-            </form>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-              <div className="rounded-md border p-3">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Custos apurados dos Rolls</div>
-                <div className="text-xl font-semibold">{brl(sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))))}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Despesas lançadas</div>
-                <div className="text-xl font-semibold">{brl(totalDespesas)}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Total custos + despesas</div>
-                <div className="text-xl font-semibold">{brl(addMoney(sumMoneyValues((rolls as any[]).map((roll) => getRollCost(roll))), totalDespesas))}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Resultado após despesas</div>
-                <div className={`text-xl font-semibold ${resultadoAposDespesas >= 0 ? "text-success" : "text-destructive"}`}>{brl(resultadoAposDespesas)}</div>
+          <div className="rounded-md border bg-card overflow-hidden mb-6">
+            <div className="border-b px-4 py-5 text-center">
+              <div className="text-xl font-bold tracking-wide">RELATÓRIO DE DESPESAS GERAIS</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Período filtrado: {brDate(dataInicio)} a {brDate(dataFim)}
               </div>
             </div>
 
-            <div className="overflow-x-auto mb-6">
-              <table className="w-full text-sm">
-                <thead className="text-[11px] uppercase text-muted-foreground border-b">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">Lançamento</th>
-                    <th className="text-left px-3 py-2 font-medium">Vencimento</th>
-                    <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
-                    <th className="text-left px-3 py-2 font-medium">Descrição</th>
-                    <th className="text-left px-3 py-2 font-medium">Tipo</th>
-                    <th className="text-left px-3 py-2 font-medium">Pagamento</th>
-                    <th className="text-right px-3 py-2 font-medium">Valor</th>
-                    <th className="text-right px-3 py-2 font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {despesasFiltradas.map((item) => (
-                    <tr key={item.id} className="border-t">
-                      <td className="px-3 py-2">{formatDateForDisplay(item.data)}</td>
-                      <td className="px-3 py-2">{formatDateForDisplay(item.dataVencimento) || "—"}</td>
-                      <td className="px-3 py-2">{item.fornecedor}</td>
-                      <td className="px-3 py-2">{item.descricao}</td>
-                      <td className="px-3 py-2">{item.tipo}</td>
-                      <td className="px-3 py-2">{item.pagamento || "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono">{brl(item.valor)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleEdit(item)}>Editar</Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => handleDelete(item.id)}>Excluir</Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {despesasFiltradas.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhuma despesa lançada no período.</td></tr>
-                  ) : null}
-                </tbody>
-              </table>
+            <div className="p-4 border-b">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Receita efetiva pós-imposto</div>
+                  <div className="text-xl font-semibold">{brl(receitaTotals.liquidoPosImpostoEfetivo)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Já considera o custo efetivo da prestadora.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Custo apurado dos Rolls</div>
+                  <div className="text-xl font-semibold">{brl(totalCustosRolls)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Referência operacional calculada pela Alyani.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Despesas gerais</div>
+                  <div className="text-xl font-semibold">{brl(totalDespesas)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Gastos lançados fora do custo direto dos Rolls.</div>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Resultado final</div>
+                  <div className={`text-xl font-semibold ${resultadoAposDespesas >= 0 ? "text-success" : "text-destructive"}`}>
+                    {brl(resultadoAposDespesas)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">Receita pós-imposto − despesas gerais.</div>
+                </div>
+              </div>
+              <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                O custo dos Rolls não é subtraído novamente no Resultado final, porque o custo da prestadora já faz parte do cálculo da Receita efetiva.
+              </div>
             </div>
 
-            <div className="rounded-md border overflow-hidden">
-              <div className="px-4 py-3 border-b flex items-center justify-between">
-                <div className="text-sm font-semibold">Detalhamento de custos e despesas</div>
-                <div className="text-[11px] uppercase text-muted-foreground">{itensDetalhados.length} itens</div>
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <div className="text-sm font-semibold">Lançar despesa geral</div>
+                  <div className="text-xs text-muted-foreground">Ex.: aluguel, combustível, contador, manutenção, energia e outras despesas da empresa.</div>
+                </div>
+                {editId ? <div className="text-xs text-muted-foreground">Editando lançamento</div> : null}
               </div>
-              <div className="overflow-x-auto">
+
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Data</Label>
+                  <Input type="date" value={form.data} onChange={(e) => setForm((prev) => ({ ...prev, data: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Vencimento</Label>
+                  <Input type="date" value={form.dataVencimento} onChange={(e) => setForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fornecedor</Label>
+                  <Input value={form.fornecedor} onChange={(e) => setForm((prev) => ({ ...prev, fornecedor: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Categoria</Label>
+                  <Input placeholder="Aluguel, combustível..." value={form.tipo} onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))} />
+                </div>
+                <div className="xl:col-span-2">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Descrição</Label>
+                  <Input value={form.descricao} onChange={(e) => setForm((prev) => ({ ...prev, descricao: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Valor</Label>
+                  <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm((prev) => ({ ...prev, valor: e.target.value }))} />
+                </div>
+                <div className="md:col-span-2 xl:col-span-3">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Forma de pagamento</Label>
+                  <Input placeholder="PIX, boleto, cartão..." value={form.pagamento} onChange={(e) => setForm((prev) => ({ ...prev, pagamento: e.target.value }))} />
+                </div>
+                <div className="md:col-span-2 xl:col-span-4 flex items-end gap-2">
+                  <Button type="submit">{editId ? "Salvar alterações" : "Adicionar despesa"}</Button>
+                  {editId ? <Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button> : null}
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-semibold">Despesas gerais</div>
+                  <div className="text-xs text-muted-foreground">Somente gastos cadastrados manualmente neste relatório.</div>
+                </div>
+                <div className="text-xs text-muted-foreground">{despesasFiltradas.length} lançamento(s)</div>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
                 <table className="w-full text-sm">
                   <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
                     <tr>
                       <th className="text-left px-3 py-2 font-medium">Data</th>
-                      <th className="text-left px-3 py-2 font-medium">Origem</th>
+                      <th className="text-left px-3 py-2 font-medium">Vencimento</th>
+                      <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
+                      <th className="text-left px-3 py-2 font-medium">Categoria</th>
                       <th className="text-left px-3 py-2 font-medium">Descrição</th>
+                      <th className="text-left px-3 py-2 font-medium">Pagamento</th>
                       <th className="text-right px-3 py-2 font-medium">Valor</th>
+                      <th className="text-right px-3 py-2 font-medium">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {itensDetalhados.map((item) => (
+                    {despesasFiltradas.map((item) => (
                       <tr key={item.id} className="border-t">
-                        <td className="px-3 py-2">{item.data}</td>
-                        <td className="px-3 py-2">{item.origem}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{formatDateForDisplay(item.data)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{formatDateForDisplay(item.dataVencimento) || "—"}</td>
+                        <td className="px-3 py-2">{item.fornecedor}</td>
+                        <td className="px-3 py-2">{item.tipo}</td>
                         <td className="px-3 py-2">{item.descricao}</td>
-                        <td className="px-3 py-2 text-right font-mono">{brl(item.valor)}</td>
+                        <td className="px-3 py-2">{item.pagamento || "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(item.valor)}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleEdit(item)}>Editar</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => handleDelete(item.id)}>Excluir</Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
+                    {despesasFiltradas.length === 0 ? (
+                      <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Nenhuma despesa geral lançada no período.</td></tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-semibold">Custos apurados dos Rolls</div>
+                  <div className="text-xs text-muted-foreground">Detalhamento operacional separado das despesas gerais.</div>
+                </div>
+                <div className="text-xs text-muted-foreground">{custosRollsDetalhados.length} Roll(s)</div>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="text-[11px] uppercase text-muted-foreground bg-muted/40">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">Data</th>
+                      <th className="text-left px-3 py-2 font-medium">Roll</th>
+                      <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                      <th className="text-left px-3 py-2 font-medium">Prestadora</th>
+                      <th className="text-right px-3 py-2 font-medium">Custo apurado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {custosRollsDetalhados.map((item) => (
+                      <tr key={item.id} className="border-t">
+                        <td className="px-3 py-2 whitespace-nowrap">{item.data}</td>
+                        <td className="px-3 py-2 font-mono">{item.numero}</td>
+                        <td className="px-3 py-2">{item.cliente}</td>
+                        <td className="px-3 py-2">{item.prestadora}</td>
+                        <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{brl(item.valor)}</td>
+                      </tr>
+                    ))}
+                    {custosRollsDetalhados.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhum Roll encontrado no período.</td></tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>
