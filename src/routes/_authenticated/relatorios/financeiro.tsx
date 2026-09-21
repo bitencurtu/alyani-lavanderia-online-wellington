@@ -144,6 +144,9 @@ function getRecebimentoStatus(cobrancas: any[]) {
     .sort();
 
   if (pagas.length === validas.length) {
+    // Registros novos exigem a data real do pagamento. Mantemos um aviso para
+    // cobranças antigas que porventura tenham sido marcadas como pagas sem data.
+    if (datas.length === 0) return { label: "Pago sem data", data: "" };
     return { label: "Pago", data: datas.at(-1) ?? "" };
   }
   if (pagas.length > 0) return { label: "Parcial", data: datas.at(-1) ?? "" };
@@ -1142,6 +1145,9 @@ function Page() {
                   <div className="text-sm font-semibold">Fechamentos por cliente</div>
                   <div className="text-xs text-muted-foreground">
                     Resumo principal. Use “Detalhes” para abrir os cálculos completos de cada fechamento.
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Dados integrados automaticamente: valor a receber e pagamento vêm de Cobranças; apurado Alyani vem dos Rolls; valor Teixeira vem da conferência com o Roll Prestadora.
                   </div>
                 </div>
               </div>

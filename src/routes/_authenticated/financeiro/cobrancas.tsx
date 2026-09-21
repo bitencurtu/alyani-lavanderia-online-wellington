@@ -21,7 +21,6 @@ import {
   COBRANCA_STATUS_CLASS,
   COBRANCA_STATUS_LABEL,
   percentageOfTotal,
-  todayIsoDate,
   type CobrancaStatus,
 } from "@/lib/financeiro";
 import { toast } from "sonner";
@@ -39,6 +38,7 @@ function Page() {
     dataFim: lastOfMonth(),
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dataPagamentoLote, setDataPagamentoLote] = useState("");
 
   const { data: hoteis = [] } = useQuery({
     queryKey: HOTEIS_LITE_QUERY_KEY,
@@ -112,34 +112,40 @@ function Page() {
   });
 
   const patchSelected = useMutation({
-    mutationFn: async (status: CobrancaStatus) => {
+    mutationFn: async ({
+      status,
+      dataPagamento,
+    }: {
+      status: CobrancaStatus;
+      dataPagamento?: string;
+    }) => {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
 
-      // Uma atualização em lote para o status, em vez de uma requisição por Roll.
-      const { error } = await supabase.from("cobrancas").update({ status }).in("id", ids);
-      if (error) throw error;
-
-      // Ao marcar como pago, preenche a data somente onde ainda está vazia.
-      // No máximo são duas chamadas para qualquer quantidade de Rolls selecionados.
-      if (status === "pago") {
-        const idsSemData = rows
-          .filter((row: any) => ids.includes(row.id) && !row.data_pagamento)
-          .map((row: any) => row.id);
-
-        if (idsSemData.length > 0) {
-          const { error: dateError } = await supabase
-            .from("cobrancas")
-            .update({ data_pagamento: todayIsoDate() })
-            .in("id", idsSemData);
-          if (dateError) throw dateError;
-        }
+      if (status === "pago" && !dataPagamento) {
+        throw new Error("Escolha a data em que o pagamento foi feito.");
       }
+
+      const updateData: Record<string, unknown> = { status };
+
+      // A data do pagamento é sempre informada pelo usuário. Não usamos automaticamente
+      // a data de hoje, pois o lançamento pode estar sendo feito depois do pagamento real.
+      // Ao voltar para outro status, limpamos a data para não deixar um recebimento antigo
+      // contaminando o relatório de Receita.
+      updateData.data_pagamento = status === "pago" ? dataPagamento : null;
+
+      const { error } = await supabase
+        .from("cobrancas")
+        .update(updateData as any)
+        .in("id", ids);
+
+      if (error) throw error;
     },
-    onSuccess: (_, status) => {
+    onSuccess: (_, variables) => {
       invalidateFinanceiro();
       setSelectedIds(new Set());
-      toast.success(`${COBRANCA_STATUS_LABEL[status]} aplicado aos Rolls selecionados.`);
+      if (variables.status === "pago") setDataPagamentoLote("");
+      toast.success(`${COBRANCA_STATUS_LABEL[variables.status]} aplicado aos Rolls selecionados.`);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -163,6 +169,7 @@ function Page() {
   const clearFilters = () => {
     setFilters({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
     setSelectedIds(new Set());
+    setDataPagamentoLote("");
   };
 
   const handleExportPdf = () => {
@@ -401,11 +408,64 @@ function Page() {
               ? `${selectedIds.size} Roll${selectedIds.size > 1 ? "s" : ""} selecionado${selectedIds.size > 1 ? "s" : ""}`
               : "Selecione um ou mais Rolls para alterar o status"}
           </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pendente")}>Marcar pendente</Button>
-            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("pago")}>Marcar pago</Button>
-            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("atrasado")}>Marcar atrasado</Button>
-            <Button className="h-8" size="sm" variant="outline" disabled={!someVisibleSelected || patchSelected.isPending} onClick={() => patchSelected.mutate("cancelado")}>Marcar cancelado</Button>
+          <div className="flex flex-wrap items-end gap-2">
+            <Button
+              className="h-8"
+              size="sm"
+              variant="outline"
+              disabled={!someVisibleSelected || patchSelected.isPending}
+              onClick={() => patchSelected.mutate({ status: "pendente" })}
+            >
+              Marcar pendente
+            </Button>
+
+            <div className="flex items-end gap-2 rounded-md border bg-background px-2 py-1">
+              <div>
+                <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Data do pagamento
+                </Label>
+                <Input
+                  type="date"
+                  className="h-8 w-[145px] border-0 px-0 shadow-none focus-visible:ring-0"
+                  value={dataPagamentoLote}
+                  onChange={(e) => setDataPagamentoLote(e.target.value)}
+                  disabled={!someVisibleSelected || patchSelected.isPending}
+                />
+              </div>
+              <Button
+                className="h-8"
+                size="sm"
+                variant="outline"
+                disabled={!someVisibleSelected || patchSelected.isPending}
+                onClick={() =>
+                  patchSelected.mutate({
+                    status: "pago",
+                    dataPagamento: dataPagamentoLote,
+                  })
+                }
+              >
+                Marcar pago
+              </Button>
+            </div>
+
+            <Button
+              className="h-8"
+              size="sm"
+              variant="outline"
+              disabled={!someVisibleSelected || patchSelected.isPending}
+              onClick={() => patchSelected.mutate({ status: "atrasado" })}
+            >
+              Marcar atrasado
+            </Button>
+            <Button
+              className="h-8"
+              size="sm"
+              variant="outline"
+              disabled={!someVisibleSelected || patchSelected.isPending}
+              onClick={() => patchSelected.mutate({ status: "cancelado" })}
+            >
+              Marcar cancelado
+            </Button>
           </div>
         </div>
 
@@ -462,8 +522,17 @@ function Page() {
                     <Input
                       type="date"
                       className="h-8"
-                      value={c.data_pagamento ?? ""}
-                      onChange={(e) => patch.mutate({ id: c.id, upd: { data_pagamento: e.target.value || null } })}
+                      value={c.status === "pago" ? (c.data_pagamento ?? "") : ""}
+                      disabled={c.status !== "pago"}
+                      title={c.status === "pago" ? "Data real em que o cliente pagou" : "Marque a cobrança como paga para informar a data"}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (!value) {
+                          toast.error("Uma cobrança paga precisa ter a data real do pagamento.");
+                          return;
+                        }
+                        patch.mutate({ id: c.id, upd: { data_pagamento: value } });
+                      }}
                     />
                   </td>
                 </tr>
