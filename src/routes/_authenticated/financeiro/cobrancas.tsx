@@ -15,6 +15,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { brl, brDate, firstOfMonth, lastOfMonth } from "@/lib/format";
 import {
   calculateCollectionTotals,
@@ -25,6 +33,15 @@ import {
 } from "@/lib/financeiro";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
+import { Ban, CheckCircle2, CircleDollarSign, Clock3 } from "lucide-react";
+import { sumMoneyValues } from "@/lib/calculos";
+
+
+function getTodayForInput() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
 
 export const Route = createFileRoute("/_authenticated/financeiro/cobrancas")({
   head: () => ({ meta: [{ title: "Cobranças — Alyani" }] }),
@@ -39,6 +56,7 @@ function Page() {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dataPagamentoLote, setDataPagamentoLote] = useState("");
+  const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
 
   const { data: hoteis = [] } = useQuery({
     queryKey: HOTEIS_LITE_QUERY_KEY,
@@ -125,6 +143,9 @@ function Page() {
       if (status === "pago" && !dataPagamento) {
         throw new Error("Escolha a data em que o pagamento foi feito.");
       }
+      if (status === "pago" && dataPagamento && dataPagamento > getTodayForInput()) {
+        throw new Error("A data do pagamento não pode estar no futuro.");
+      }
 
       const updateData: Record<string, unknown> = { status };
 
@@ -144,11 +165,24 @@ function Page() {
     onSuccess: (_, variables) => {
       invalidateFinanceiro();
       setSelectedIds(new Set());
-      if (variables.status === "pago") setDataPagamentoLote("");
+      if (variables.status === "pago") {
+        setDataPagamentoLote("");
+        setPagamentoDialogOpen(false);
+      }
       toast.success(`${COBRANCA_STATUS_LABEL[variables.status]} aplicado aos Rolls selecionados.`);
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const selectedRows = useMemo(
+    () => rows.filter((row: any) => selectedIds.has(row.id)),
+    [rows, selectedIds],
+  );
+  const selectedTotal = useMemo(
+    () => sumMoneyValues(selectedRows.map((row: any) => row.valor)),
+    [selectedRows],
+  );
+  const emAberto = totals.pendente + totals.atrasado;
 
   const allVisibleSelected = rows.length > 0 && rows.every((row: any) => selectedIds.has(row.id));
   const someVisibleSelected = rows.some((row: any) => selectedIds.has(row.id));
@@ -170,6 +204,7 @@ function Page() {
     setFilters({ dataInicio: firstOfMonth(), dataFim: lastOfMonth() });
     setSelectedIds(new Set());
     setDataPagamentoLote("");
+    setPagamentoDialogOpen(false);
   };
 
   const handleExportPdf = () => {
@@ -373,42 +408,82 @@ function Page() {
         </div>
       </FilterBar>
 
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Total ativo</div>
-          <div className="text-xl font-semibold mt-1">{brl(totals.total)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{totals.total > 0 ? "100,00%" : "0,00%"}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Total a receber</div>
+              <div className="mt-1 text-2xl font-semibold">{brl(totals.total)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Cobranças ativas no período filtrado.</div>
+            </div>
+            <div className="rounded-md bg-muted p-2 text-muted-foreground">
+              <CircleDollarSign className="h-4 w-4" />
+            </div>
+          </div>
         </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Pendente</div>
-          <div className="text-xl font-semibold mt-1 text-warning">{brl(totals.pendente)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{activePercentage(totals.pendente).toFixed(2).replace(".", ",")}%</div>
+
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Recebido</div>
+              <div className="mt-1 text-2xl font-semibold text-success">{brl(totals.pago)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {activePercentage(totals.pago).toFixed(2).replace(".", ",")}% do total ativo.
+              </div>
+            </div>
+            <div className="rounded-md bg-muted p-2 text-success">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </div>
         </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Pago</div>
-          <div className="text-xl font-semibold mt-1 text-success">{brl(totals.pago)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{activePercentage(totals.pago).toFixed(2).replace(".", ",")}%</div>
+
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Em aberto</div>
+              <div className="mt-1 text-2xl font-semibold">{brl(emAberto)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {brl(totals.pendente)} pendente · {brl(totals.atrasado)} atrasado
+              </div>
+            </div>
+            <div className="rounded-md bg-muted p-2 text-warning">
+              <Clock3 className="h-4 w-4" />
+            </div>
+          </div>
         </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Atrasado</div>
-          <div className="text-xl font-semibold mt-1 text-destructive">{brl(totals.atrasado)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{activePercentage(totals.atrasado).toFixed(2).replace(".", ",")}%</div>
-        </div>
-        <div className="rounded-md border bg-card p-4">
-          <div className="text-[11px] uppercase text-muted-foreground">Cancelado</div>
-          <div className="text-xl font-semibold mt-1 text-muted-foreground">{brl(totals.cancelado)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{canceledPercentage(totals.cancelado).toFixed(2).replace(".", ",")}%</div>
+
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Cancelado</div>
+              <div className="mt-1 text-2xl font-semibold text-muted-foreground">{brl(totals.cancelado)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {canceledPercentage(totals.cancelado).toFixed(2).replace(".", ",")}% do total geral.
+              </div>
+            </div>
+            <div className="rounded-md bg-muted p-2 text-muted-foreground">
+              <Ban className="h-4 w-4" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-md border bg-card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-4 py-2">
-          <span className="text-sm text-muted-foreground mr-auto">
-            {selectedIds.size > 0
-              ? `${selectedIds.size} Roll${selectedIds.size > 1 ? "s" : ""} selecionado${selectedIds.size > 1 ? "s" : ""}`
-              : "Selecione um ou mais Rolls para alterar o status"}
-          </span>
-          <div className="flex flex-wrap items-end gap-2">
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="flex flex-col gap-3 border-b bg-muted/15 px-4 py-3 lg:flex-row lg:items-center">
+          <div className="mr-auto min-w-0">
+            <div className="text-sm font-medium">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} cobrança${selectedIds.size > 1 ? "s" : ""} selecionada${selectedIds.size > 1 ? "s" : ""}`
+                : "Cobranças do período"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {selectedIds.size > 0
+                ? `${brl(selectedTotal)} selecionado${selectedIds.size > 1 ? "s" : ""}. As alterações também atualizam o Relatório de Receita.`
+                : "Selecione uma ou mais cobranças para alterar o status em lote."}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               className="h-8"
               size="sm"
@@ -416,38 +491,8 @@ function Page() {
               disabled={!someVisibleSelected || patchSelected.isPending}
               onClick={() => patchSelected.mutate({ status: "pendente" })}
             >
-              Marcar pendente
+              Pendente
             </Button>
-
-            <div className="flex items-end gap-2 rounded-md border bg-background px-2 py-1">
-              <div>
-                <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Data do pagamento
-                </Label>
-                <Input
-                  type="date"
-                  className="h-8 w-[145px] border-0 px-0 shadow-none focus-visible:ring-0"
-                  value={dataPagamentoLote}
-                  onChange={(e) => setDataPagamentoLote(e.target.value)}
-                  disabled={!someVisibleSelected || patchSelected.isPending}
-                />
-              </div>
-              <Button
-                className="h-8"
-                size="sm"
-                variant="outline"
-                disabled={!someVisibleSelected || patchSelected.isPending}
-                onClick={() =>
-                  patchSelected.mutate({
-                    status: "pago",
-                    dataPagamento: dataPagamentoLote,
-                  })
-                }
-              >
-                Marcar pago
-              </Button>
-            </div>
-
             <Button
               className="h-8"
               size="sm"
@@ -455,7 +500,7 @@ function Page() {
               disabled={!someVisibleSelected || patchSelected.isPending}
               onClick={() => patchSelected.mutate({ status: "atrasado" })}
             >
-              Marcar atrasado
+              Atrasado
             </Button>
             <Button
               className="h-8"
@@ -464,7 +509,15 @@ function Page() {
               disabled={!someVisibleSelected || patchSelected.isPending}
               onClick={() => patchSelected.mutate({ status: "cancelado" })}
             >
-              Marcar cancelado
+              Cancelado
+            </Button>
+            <Button
+              className="h-8"
+              size="sm"
+              disabled={!someVisibleSelected || patchSelected.isPending}
+              onClick={() => setPagamentoDialogOpen(true)}
+            >
+              Registrar pagamento
             </Button>
           </div>
         </div>
@@ -521,7 +574,8 @@ function Page() {
                   <td className="px-2 py-1">
                     <Input
                       type="date"
-                      className="h-8"
+                      className="h-8 min-w-[138px] bg-transparent"
+                      max={getTodayForInput()}
                       value={c.status === "pago" ? (c.data_pagamento ?? "") : ""}
                       disabled={c.status !== "pago"}
                       title={c.status === "pago" ? "Data real em que o cliente pagou" : "Marque a cobrança como paga para informar a data"}
@@ -529,6 +583,10 @@ function Page() {
                         const value = e.target.value;
                         if (!value) {
                           toast.error("Uma cobrança paga precisa ter a data real do pagamento.");
+                          return;
+                        }
+                        if (value > getTodayForInput()) {
+                          toast.error("A data do pagamento não pode estar no futuro.");
                           return;
                         }
                         patch.mutate({ id: c.id, upd: { data_pagamento: value } });
@@ -546,6 +604,64 @@ function Page() {
           </table>
         </div>
       </div>
+
+      <Dialog
+        open={pagamentoDialogOpen}
+        onOpenChange={(open) => {
+          setPagamentoDialogOpen(open);
+          if (!open) setDataPagamentoLote("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar pagamento</DialogTitle>
+            <DialogDescription>
+              Informe a data real em que o cliente pagou. Ela será usada automaticamente no Relatório de Receita.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/20 p-3">
+              <div className="text-sm font-medium">
+                {selectedIds.size} cobrança{selectedIds.size > 1 ? "s" : ""} · {brl(selectedTotal)}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Todas as cobranças selecionadas receberão a mesma data de pagamento.
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="data-pagamento-lote">Data do pagamento</Label>
+              <Input
+                id="data-pagamento-lote"
+                type="date"
+                className="mt-1"
+                max={getTodayForInput()}
+                value={dataPagamentoLote}
+                onChange={(e) => setDataPagamentoLote(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPagamentoDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={!dataPagamentoLote || patchSelected.isPending}
+              onClick={() =>
+                patchSelected.mutate({
+                  status: "pago",
+                  dataPagamento: dataPagamentoLote,
+                })
+              }
+            >
+              {patchSelected.isPending ? "Salvando..." : "Confirmar pagamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

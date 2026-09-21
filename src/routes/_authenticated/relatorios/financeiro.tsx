@@ -140,16 +140,23 @@ function getRecebimentoStatus(cobrancas: any[]) {
   const atrasadas = validas.filter((c) => c?.status === "atrasado");
   const datas = pagas
     .map((c) => c?.data_pagamento as string | null)
-    .filter(Boolean)
+    .filter((data): data is string => Boolean(data))
     .sort();
+  const datasUnicas = [...new Set(datas)];
 
   if (pagas.length === validas.length) {
-    // Registros novos exigem a data real do pagamento. Mantemos um aviso para
-    // cobranças antigas que porventura tenham sido marcadas como pagas sem data.
-    if (datas.length === 0) return { label: "Pago sem data", data: "" };
-    return { label: "Pago", data: datas.at(-1) ?? "" };
+    // O relatório usa exatamente a data informada em Cobranças. Se um mesmo
+    // fechamento foi recebido em datas diferentes, não fingimos que houve uma
+    // única data: sinalizamos isso no relatório.
+    if (datas.length !== pagas.length) return { label: "Pago sem data", data: "" };
+    if (datasUnicas.length === 1) return { label: "Pago", data: datasUnicas[0] };
+    return { label: "Pago em datas diferentes", data: "" };
   }
-  if (pagas.length > 0) return { label: "Parcial", data: datas.at(-1) ?? "" };
+
+  if (pagas.length > 0) {
+    if (datasUnicas.length === 1) return { label: "Parcial", data: datasUnicas[0] };
+    return { label: "Parcial em datas diferentes", data: "" };
+  }
   if (atrasadas.length > 0) return { label: "Atrasado", data: "" };
   return { label: "Pendente", data: "" };
 }
@@ -984,9 +991,9 @@ function Page() {
   };
 
   const statusClass = (status: string) => {
-    if (status === "Pago") return "text-success";
+    if (status.startsWith("Pago")) return "text-success";
     if (status === "Atrasado") return "text-destructive";
-    if (status === "Parcial") return "text-warning";
+    if (status.startsWith("Parcial")) return "text-warning";
     return "text-muted-foreground";
   };
 
