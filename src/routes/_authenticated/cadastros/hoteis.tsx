@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/cadastros/hoteis")({
 });
 
 type Hotel = {
-  id: string; nome: string; razao_social?: string | null; cnpj?: string | null;
+  id: string; nome: string; razao_social?: string | null; inscricao?: string | null; cnpj?: string | null;
   telefone?: string | null; email?: string | null; endereco?: string | null;
   cep?: string | null; status: "ativo" | "inativo"; observacoes?: string | null;
 };
@@ -134,6 +134,8 @@ function HoteisPage() {
                 <Label>Razão social</Label>
                 <Input value={editing.razao_social ?? ""} onChange={(e) => setEditing({ ...editing, razao_social: e.target.value })} />
               </div>
+              <div><Label>Inscrição</Label>
+                <Input value={editing.inscricao ?? ""} onChange={(e) => setEditing({ ...editing, inscricao: e.target.value })} /></div>
               <div><Label>CNPJ</Label>
                 <Input value={editing.cnpj ?? ""} onChange={(e) => setEditing({ ...editing, cnpj: e.target.value })} /></div>
               <div><Label>Telefone</Label>
