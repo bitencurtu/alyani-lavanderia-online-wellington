@@ -82,7 +82,19 @@ function Page() {
     },
   });
 
-  const hotel = hoteis.find((entry) => entry.id === hotelId);
+  const { data: hotel = null } = useQuery({
+    queryKey: ["rel-cliente-dados-fiscais", hotelId],
+    enabled: !!hotelId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hoteis")
+        .select("id,nome,razao_social,inscricao,cnpj,endereco,cep")
+        .eq("id", hotelId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const precosPorPeca = useMemo(() => {
     const map = new Map<
