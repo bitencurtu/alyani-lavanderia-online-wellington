@@ -54,6 +54,41 @@ function isValidVencimento(value: string | null | undefined) {
   return !value || (value >= MIN_VENCIMENTO && value <= MAX_VENCIMENTO);
 }
 
+function isoToBrDate(value: string | null | undefined) {
+  if (!value) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return "";
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function maskBrDate(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function brDateToIso(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const iso = `${match[3]}-${match[2]}-${match[1]}`;
+  return isValidVencimento(iso) ? iso : null;
+}
+
 
 function Page() {
   console.log("roll-alyani.$id montado");
@@ -102,8 +137,12 @@ function Page() {
   });
 
   const [header, setHeader] = useState<any>(null);
+  const [vencimentoTexto, setVencimentoTexto] = useState("");
   useEffect(() => {
-    if (roll) setHeader(roll);
+    if (roll) {
+      setHeader(roll);
+      setVencimentoTexto(isoToBrDate((roll as any).data_vencimento));
+    }
   }, [roll]);
 
   const invalidateAllRelatedQueries = () => {
@@ -118,6 +157,9 @@ function Page() {
 
   const saveHeader = useMutation({
     mutationFn: async () => {
+      if (vencimentoTexto.trim() && !brDateToIso(vencimentoTexto)) {
+        throw new Error("Informe um vencimento válido no formato DD/MM/AAAA, entre 01/01/2000 e 31/12/2100.");
+      }
       if (!isValidVencimento(header.data_vencimento)) {
         throw new Error("O vencimento deve estar entre 01/01/2000 e 31/12/2100.");
       }
@@ -317,14 +359,29 @@ function Page() {
         <div>
           <Label>Vencimento</Label>
           <Input
-            type="date"
-            min={MIN_VENCIMENTO}
-            max={MAX_VENCIMENTO}
-            value={header.data_vencimento ?? ""}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="DD/MM/AAAA"
+            maxLength={10}
+            value={vencimentoTexto}
             onChange={(e) => {
-              const value = e.target.value;
-              if (isValidVencimento(value)) {
-                setHeader({ ...header, data_vencimento: value });
+              const formatted = maskBrDate(e.target.value);
+              setVencimentoTexto(formatted);
+
+              if (!formatted) {
+                setHeader({ ...header, data_vencimento: "" });
+                return;
+              }
+
+              const iso = brDateToIso(formatted);
+              setHeader({ ...header, data_vencimento: iso ?? "" });
+            }}
+            onBlur={() => {
+              if (vencimentoTexto && !brDateToIso(vencimentoTexto)) {
+                toast.error(
+                  "Informe um vencimento válido no formato DD/MM/AAAA, entre 01/01/2000 e 31/12/2100.",
+                );
               }
             }}
           />
