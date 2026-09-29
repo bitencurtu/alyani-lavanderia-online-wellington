@@ -47,6 +47,33 @@ function isValidVencimento(value: string | null | undefined) {
   return !value || (value >= MIN_VENCIMENTO && value <= MAX_VENCIMENTO);
 }
 
+function maskBrDate(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function brDateToIso(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const iso = `${match[3]}-${match[2]}-${match[1]}`;
+  return isValidVencimento(iso) ? iso : null;
+}
 
 function Page() {
   const matches = useMatches();
@@ -74,6 +101,7 @@ function Page() {
     nf_fat: "",
   });
   const [novoItens, setNovoItens] = useState<NovoItem[]>([]);
+  const [vencimentoTexto, setVencimentoTexto] = useState("");
   const pecaTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const { data: hoteis = [] } = useQuery({
     queryKey: HOTEIS_LITE_QUERY_KEY,
@@ -461,14 +489,29 @@ function Page() {
               <div>
                 <Label>Vencimento</Label>
                 <Input
-                  type="date"
-                  min={MIN_VENCIMENTO}
-                  max={MAX_VENCIMENTO}
-                  value={novo.data_vencimento}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="DD/MM/AAAA"
+                  maxLength={10}
+                  value={vencimentoTexto}
                   onChange={(e) => {
-                    const value = e.target.value;
-                    if (isValidVencimento(value)) {
-                      setNovo({ ...novo, data_vencimento: value });
+                    const formatted = maskBrDate(e.target.value);
+                    setVencimentoTexto(formatted);
+
+                    if (!formatted) {
+                      setNovo({ ...novo, data_vencimento: "" });
+                      return;
+                    }
+
+                    const iso = brDateToIso(formatted);
+                    setNovo({ ...novo, data_vencimento: iso ?? "" });
+                  }}
+                  onBlur={() => {
+                    if (vencimentoTexto && !brDateToIso(vencimentoTexto)) {
+                      toast.error(
+                        "Informe um vencimento válido no formato DD/MM/AAAA, entre 01/01/2000 e 31/12/2100.",
+                      );
                     }
                   }}
                 />
