@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedRelatoriosIndexRouteImport } from './routes/_authenticated/relatorios/index'
@@ -46,6 +47,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
   '/cadastros/hoteis': typeof AuthenticatedCadastrosHoteisRoute
   '/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
   '/cadastros/hoteis': typeof AuthenticatedCadastrosHoteisRoute
   '/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/cadastros/hoteis': typeof AuthenticatedCadastrosHoteisRoute
   '/_authenticated/cadastros/pecas': typeof AuthenticatedCadastrosPecasRoute
   '/_authenticated/cadastros/prestadoras': typeof AuthenticatedCadastrosPrestadorasRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/configuracoes'
     | '/dashboard'
+    | '/historico'
     | '/cadastros/hoteis'
     | '/cadastros/pecas'
     | '/cadastros/prestadoras'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/configuracoes'
     | '/dashboard'
+    | '/historico'
     | '/cadastros/hoteis'
     | '/cadastros/pecas'
     | '/cadastros/prestadoras'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/configuracoes'
     | '/_authenticated/dashboard'
+    | '/_authenticated/historico'
     | '/_authenticated/cadastros/hoteis'
     | '/_authenticated/cadastros/pecas'
     | '/_authenticated/cadastros/prestadoras'
@@ -345,6 +357,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/historico': {
+      id: '/_authenticated/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
@@ -522,6 +541,7 @@ const AuthenticatedOperacaoRollPrestadoraRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedCadastrosHoteisRoute: typeof AuthenticatedCadastrosHoteisRoute
   AuthenticatedCadastrosPecasRoute: typeof AuthenticatedCadastrosPecasRoute
   AuthenticatedCadastrosPrestadorasRoute: typeof AuthenticatedCadastrosPrestadorasRoute
@@ -543,6 +563,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedCadastrosHoteisRoute: AuthenticatedCadastrosHoteisRoute,
   AuthenticatedCadastrosPecasRoute: AuthenticatedCadastrosPecasRoute,
   AuthenticatedCadastrosPrestadorasRoute:
